@@ -36,20 +36,15 @@ public:
 
     virtual SJsonNodeType GetType() const = 0;
 
-    virtual explicit operator ll() const  { throw; }
-    virtual explicit operator double() const { throw; }
-    virtual explicit operator bool() const { throw; }
-    virtual explicit operator std::string () const { throw; }
+    virtual ll GetInt() const { throw; }
+    virtual double GetFloat() const { throw; }
+    virtual bool GetBool() const { throw; }
+    virtual std::string GetString() const { throw; }
 
-    virtual std::vector<std::shared_ptr<SJsonNode>>::const_iterator begin() const {
-        throw;
-    }
-    virtual std::vector<std::shared_ptr<SJsonNode>>::const_iterator end() const {
-        throw;
-    }
-    virtual const std::shared_ptr<SJsonNode>& operator[] (const std::string& str) const {
-        throw;
-    }
+    virtual std::vector<std::shared_ptr<SJsonNode>>::const_iterator begin() const { throw; }
+    virtual std::vector<std::shared_ptr<SJsonNode>>::const_iterator end() const { throw; }
+    virtual std::size_t arraySize() const { throw; }
+    virtual const std::shared_ptr<SJsonNode>& operator[] (const std::string& str) const { throw; }
 };
 
 
@@ -64,21 +59,23 @@ public:
         return v->second;
     }
 
-
-
 private:
     std::map<std::string, std::shared_ptr<SJsonNode>> _value;
 };
+
+
 class SJsonArrayNode : public SJsonNode {
 public:
     SJsonArrayNode(const std::vector<std::shared_ptr<SJsonNode>>& items) : _value(items) {}
     ~SJsonArrayNode() override {}
 
     SJsonNodeType GetType() const override { return SJsonNodeType::JSON_ARRAY; };
-    virtual std::vector<std::shared_ptr<SJsonNode>>::const_iterator begin() const {
+
+    std::size_t arraySize() const override { return _value.size(); }
+    std::vector<std::shared_ptr<SJsonNode>>::const_iterator begin() const override {
         return _value.cbegin();
     }
-    virtual std::vector<std::shared_ptr<SJsonNode>>::const_iterator end() const {
+    std::vector<std::shared_ptr<SJsonNode>>::const_iterator end() const override {
         return _value.cend();
     }
 
@@ -100,7 +97,7 @@ public:
     ~SJsonBoolNode() override {}
 
     SJsonNodeType GetType() const override { return SJsonNodeType::JSON_BOOL; };
-    virtual operator bool() const override { return _value; }
+    bool GetBool() const override { return _value; }
 
 private:
     bool _value;
@@ -112,7 +109,8 @@ public:
     ~SJsonIntNode() override {}
 
     SJsonNodeType GetType() const override { return SJsonNodeType::JSON_INT; };
-    virtual operator ll() const override { return _value; }
+    ll GetInt() const override { return _value; }
+    double GetFloat() const override { return (double)_value; }
 
 private:
     ll _value;
@@ -124,7 +122,8 @@ public:
     ~SJsonFloatNode() override {}
 
     SJsonNodeType GetType() const override { return SJsonNodeType::JSON_FLOAT; };
-    virtual operator double() const override { return _value; }
+    double GetFloat() const override { return _value; }
+    ll GetInt() const override { return (ll)_value; }
 
 private:
     double _value;
@@ -137,7 +136,7 @@ public:
     ~SJsonStringNode() override {}
 
     SJsonNodeType GetType() const override { return SJsonNodeType::JSON_STRING; };
-    virtual operator std::string() const override { return _value; }
+    std::string GetString() const override { return _value; }
 
 private:
     std::string _value;

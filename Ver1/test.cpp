@@ -76,12 +76,12 @@ static void test_parse_true() {
     auto node = SJsonParse("true", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_BOOL, node->GetType());
-    EXPECT_EQ_INT(true, (bool)*node);
+    EXPECT_EQ_INT(true, node->GetBool());
 
     node = SJsonParse(" true ", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_BOOL, node->GetType());
-    EXPECT_EQ_INT(true, (bool)*node);
+    EXPECT_EQ_INT(true, node->GetBool());
 }
 
 static void test_parse_false() {
@@ -89,12 +89,12 @@ static void test_parse_false() {
     auto node = SJsonParse("false ", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_BOOL, node->GetType());
-    EXPECT_EQ_INT(false, (bool)*node);
+    EXPECT_EQ_INT(false, node->GetBool());
 
     node = SJsonParse(" false ", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_BOOL, node->GetType());
-    EXPECT_EQ_INT(false, (bool)*node);
+    EXPECT_EQ_INT(false, node->GetBool());
 }
 
 
@@ -103,7 +103,7 @@ static void validate_int_number(const std::string& text, ll number) {
     auto node = SJsonParse(text, code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_INT, node->GetType());
-    EXPECT_EQ_LINT(number, (ll)*node);
+    EXPECT_EQ_LINT(number, node->GetInt());
 }
 
 static void validate_float_number(const std::string& text, double number) {
@@ -111,7 +111,7 @@ static void validate_float_number(const std::string& text, double number) {
     auto node = SJsonParse(text, code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_FLOAT, node->GetType());
-    EXPECT_EQ_DOUBLE(number, (double)*node);
+    EXPECT_EQ_DOUBLE(number, node->GetFloat());
 }
 
 static void test_parse_int() {
@@ -162,32 +162,32 @@ static void test_parse_string() {
     auto node = SJsonParse("\"Hello\"", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_STRING, node->GetType());
-    EXPECT_EQ_STRING("Hello", ((std::string)*node).c_str());
+    EXPECT_EQ_STRING("Hello", node->GetString().c_str());
 
     node = SJsonParse("\"Hello  \"", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_STRING, node->GetType());
-    EXPECT_EQ_STRING("Hello  ", ((std::string)*node).c_str());
+    EXPECT_EQ_STRING("Hello  ", node->GetString().c_str());
 
     node = SJsonParse("\"\"", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_STRING, node->GetType());
-    EXPECT_EQ_STRING("", ((std::string)*node).c_str());
+    EXPECT_EQ_STRING("", node->GetString().c_str());
 
     node = SJsonParse("\" Hello\"", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_STRING, node->GetType());
-    EXPECT_EQ_STRING(" Hello", ((std::string)*node).c_str());
+    EXPECT_EQ_STRING(" Hello", node->GetString().c_str());
 
     node = SJsonParse("\"Hello\n\"", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_STRING, node->GetType());
-    EXPECT_EQ_STRING("Hello\n", ((std::string)*node).c_str());
+    EXPECT_EQ_STRING("Hello\n", node->GetString().c_str());
 
     node = SJsonParse("\"Hello\\\\\"", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_STRING, node->GetType());
-    EXPECT_EQ_STRING("Hello\\", ((std::string)*node).c_str());
+    EXPECT_EQ_STRING("Hello\\", node->GetString().c_str());
 
     node = SJsonParse("\"Hello\\q\"", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJOSN_INVALID_VALUE, code);
@@ -209,7 +209,7 @@ static void test_parse_array() {
     int id = 0;
     for (auto it = node->begin(); it != node->end(); it++) {
         EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_INT, (*it)->GetType());
-        EXPECT_EQ_LINT(test1[id], (ll)*(*it));
+        EXPECT_EQ_LINT(test1[id], (*it)->GetInt());
         id++;
     }
 
@@ -237,10 +237,10 @@ static void test_parse_object() {
     EXPECT_EQ_ENUM_NODE(SJsonNodeType::JSON_OBJECT, node->GetType());
 
     auto age = (*node)["Age"];
-    EXPECT_EQ_LINT(114514L, (ll)*age);
+    EXPECT_EQ_LINT(114514L, age->GetInt());
 
     auto name = (*node)["Name"];
-    EXPECT_EQ_STRING("Test", ((std::string)*name).c_str());
+    EXPECT_EQ_STRING("Test", name->GetString().c_str());
 
     node = SJsonParse(R"({ "Obj": {}, "Arr": [1, 2, 3], "": 12})", code);
     EXPECT_EQ_ENUM_ERR(SJsonErrorCode::SJSON_OK, code);

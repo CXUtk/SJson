@@ -287,7 +287,7 @@ static std::shared_ptr<SJsonNode> parse_object(std::string::const_iterator& it, 
         if (code != SJsonErrorCode::SJSON_OK) {
             return std::make_shared<SJsonNullNode>();
         }
-        objMap.insert(std::pair<std::string, std::shared_ptr<SJsonNode>>((std::string)*name, e));
+        objMap.insert(std::pair<std::string, std::shared_ptr<SJsonNode>>(name->GetString(), e));
         strip_white_space(it);
         if (*it == ',') {
             it++;
