@@ -44,7 +44,7 @@ public:
     virtual std::vector<std::shared_ptr<SJsonNode>>::const_iterator begin() const { throw; }
     virtual std::vector<std::shared_ptr<SJsonNode>>::const_iterator end() const { throw; }
     virtual std::size_t arraySize() const { throw; }
-    virtual const std::shared_ptr<SJsonNode>& operator[] (const std::string& str) const { throw; }
+    virtual const std::shared_ptr<SJsonNode>& GetMember(const std::string& str) const { throw; }
 };
 
 
@@ -54,8 +54,9 @@ public:
     ~SJsonObjectNode() override {}
 
     SJsonNodeType GetType() const override { return SJsonNodeType::JSON_OBJECT; };
-    const std::shared_ptr<SJsonNode>& operator[] (const std::string& str) const override {
+    const std::shared_ptr<SJsonNode>& GetMember(const std::string& str) const override {
         auto v = _value.find(str);
+        if (v == _value.end()) throw;
         return v->second;
     }
 
