@@ -1,4 +1,4 @@
-#include "SJson.h"
+﻿#include "SJson.h"
 #include <cassert>
 
 namespace SJson {
@@ -15,8 +15,11 @@ namespace SJson {
     static std::shared_ptr<SJsonNode> parse_value(std::string::const_iterator& it);
 
     std::string getText(std::string::const_iterator it) {
+        static char s[10];
         if (it == stringEnd) return "EOF";
-        return "" + *it;
+        s[0] = *it;
+        s[1] = '\0';
+        return s;
     }
 
     static bool isEnd(std::string::const_iterator& it) {
@@ -31,7 +34,7 @@ namespace SJson {
 
     static void expect(std::string::const_iterator& it, char ch) {
         if (it == stringEnd || *it != ch) {
-            throw ExpectTokenError(lineNumber, it - lastLineStart, "" + ch, getText(it));
+            throw ExpectTokenError(lineNumber, it - lastLineStart, std::string(1, ch), getText(it));
         }
         if (*it == '\n') newLine(it);
         it++;
@@ -297,7 +300,7 @@ namespace SJson {
         expect(it, '"');
         return std::make_shared<SJsonStringNode>(str);
     }
-    
+
 
     static std::shared_ptr<SJsonNode> parse_true(std::string::const_iterator& it) {
         static const char trueStr[5] = "true";
@@ -362,14 +365,14 @@ namespace SJson {
     }
 
     std::shared_ptr<SJsonNode> SJson::SJsonParse(const std::string& text) {
-        
+        lineNumber = 1;
         auto ptr = text.begin();
         lastLineStart = ptr;
         stringEnd = text.end();
         strip_white_space(ptr);
         auto result = parse_value(ptr);
         strip_white_space(ptr);
-        if (!isEnd(ptr)) 
+        if (!isEnd(ptr))
             throw RootNotSingularError(lineNumber, ptr - lastLineStart);
         return result;
     }

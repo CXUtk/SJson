@@ -137,7 +137,7 @@ void expect_parse_value(const std::string& text, const char* file, int line, boo
 }
 
 template<typename T>
-void expect_equal(const std::shared_ptr<SJson::SJsonNode>& node, T value, const char* file, int line) {
+void expect_equal(const SJson::SJsonNode* node, T value, const char* file, int line) {
     static_assert(false, "This data type is unsupported");
     test_count++;
     try {
@@ -157,7 +157,7 @@ void expect_equal(const std::shared_ptr<SJson::SJsonNode>& node, T value, const 
 
 
 template<>
-void expect_equal(const std::shared_ptr<SJson::SJsonNode>& node, bool value, const char* file, int line) {
+void expect_equal(const SJson::SJsonNode* node, bool value, const char* file, int line) {
     test_count++;
     try {
         if (node->GetBool() == value) {
@@ -176,7 +176,7 @@ void expect_equal(const std::shared_ptr<SJson::SJsonNode>& node, bool value, con
 
 
 template<>
-void expect_equal(const std::shared_ptr<SJson::SJsonNode>& node, ll value, const char* file, int line) {
+void expect_equal(const SJson::SJsonNode* node, ll value, const char* file, int line) {
     test_count++;
     try {
         if (node->GetInt() == value) {
@@ -193,7 +193,7 @@ void expect_equal(const std::shared_ptr<SJson::SJsonNode>& node, ll value, const
 }
 
 template<>
-void expect_equal(const std::shared_ptr<SJson::SJsonNode>& node, double value, const char* file, int line) {
+void expect_equal(const SJson::SJsonNode* node, double value, const char* file, int line) {
     test_count++;
     try {
         if (node->GetFloat() == value) {
@@ -210,7 +210,7 @@ void expect_equal(const std::shared_ptr<SJson::SJsonNode>& node, double value, c
 }
 
 template<>
-void expect_equal(const std::shared_ptr<SJson::SJsonNode>& node, std::string value, const char* file, int line) {
+void expect_equal(const SJson::SJsonNode* node, std::string value, const char* file, int line) {
     test_count++;
     try {
         if (node->GetString() == value) {
@@ -372,6 +372,7 @@ static void test_parse_float() {
     EXPECT_PARSE_THROW("7f123", SJson::InvalidValueError);
     EXPECT_PARSE_THROW("2.0e1e8", SJson::InvalidValueError);
     EXPECT_PARSE_THROW("..", SJson::InvalidValueError);
+    EXPECT_PARSE_THROW("7.0f", SJson::InvalidValueError);
 }
 
 static void test_parse_string() {

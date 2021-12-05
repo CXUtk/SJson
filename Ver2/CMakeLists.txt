@@ -3,8 +3,9 @@
 project ("SJson")
 
 
-add_executable (SJson "SJson.cpp" "SJson.h" "test.cpp" )
+add_library(SJson STATIC "SJson.cpp" "SJson.h")
 
+add_executable (SJsonTest "SJson.cpp" "SJson.h" "test.cpp" )
 
 set_target_properties (SJson PROPERTIES
                       CXX_STANDARD 17
