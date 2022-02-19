@@ -1076,7 +1076,45 @@ namespace SJson
 	// 序列化
 	// 
 
-#define PROPERTY(type, member) SJson::property(&type::member, #member)
+	template<typename T> struct is_vector : public std::false_type {};
+
+	template<typename T, typename A>
+	struct is_vector<std::vector<T, A>> : public std::true_type {};
+
+
+	template<typename T> struct is_map : public std::false_type {};
+
+	template<typename K, typename V, typename Cmp, typename Alloc>
+	struct is_map<std::map<K, V, Cmp, Alloc>> : public std::true_type {};
+
+
+#define PROPERTY(member) SJson::property(&Self_Type::member, #member)
+#define BASECLASS(type) SJson::classref<type>(#type)
+#define PLACE(...) std::make_tuple(__VA_ARGS__)
+#define PROPERTIES(Type, ...) constexpr static auto properties()\
+{\
+	using Self_Type = Type;\
+	return PLACE(__VA_ARGS__);\
+}\
+
+#define ENUM_KEY(key) case ENUM_TYPE::key: return #key;
+#define GENERATE_ENUM(T, FIELDS)\
+template<>\
+struct SJson::enum_mapper<SType>\
+{\
+	static const char* const map(T v)\
+	{\
+		using ENUM_TYPE = T;\
+		switch (v)\
+		{\
+		FIELDS(ENUM_KEY)\
+		default:\
+			break;\
+		}\
+		throw std::logic_error("Invalid enum type");\
+	}\
+};
+
 	template<typename Class, typename T>
 	struct PropertyImpl
 	{
@@ -1094,34 +1132,56 @@ namespace SJson
 		return PropertyImpl<Class, T>{member, name};
 	}
 
+	template<typename Class>
+	struct ClassImpl
+	{
+		using Type = Class;
+
+		const char* name;
+	};
+
+	template<typename Class>
+	constexpr auto classref(const char* name)
+	{
+		return ClassImpl<Class>{name};
+	}
+
 	template <typename T, T... S, typename F>
 	constexpr void for_sequence(std::integer_sequence<T, S...>, F&& f)
 	{
 		(static_cast<void>(f(std::integral_constant<T, S>{})), ...);
 	}
 
-	/**
-	 * @brief If is primitive types, we can convert it directly to a JSON value
-	 * @tparam T
-	 * @param v
-	 * @return
-	*/
-	template<typename T>
-	constexpr std::enable_if_t<std::is_fundamental<T>::value, SJson::JsonNode>
-		serialize(const T& v)
+	template <typename T>
+	class has_properties
 	{
+		typedef char one;
+		struct two { char x[2]; };
+
+		template <typename C> static one test(decltype(&C::properties));
+		template <typename C> static two test(...);
+
+	public:
+		enum { value = sizeof(test<T>(0)) == sizeof(char) };
+	};
+
+	template <typename E>
+	struct enum_mapper
+	{
+		static const char* const map(E v);
+	};
+
+	template<typename T, std::enable_if_t<std::is_fundamental<T>::value, nullptr_t> = nullptr>
+	constexpr JsonNode serialize(const T& v)
+	{
+		// If is primitive types, we can convert it directly to a JSON value
 		return SJson::JsonNode(v);
 	}
 
-	/**
-	 * @brief If is a vector of elements, we can convert them to a JSON array
-	 * @tparam T
-	 * @param v
-	 * @return
-	*/
-	template<typename T>
-	constexpr SJson::JsonNode serialize(const std::vector<T>& v)
+	template<typename T, std::enable_if_t<is_vector<T>::value, nullptr_t> = nullptr>
+	constexpr JsonNode serialize(const T& v)
 	{
+		// If is a vector of elements, we can convert them to a JSON array
 		SJson::JsonNode node = SJson::array({});
 		for (auto& e : v)
 		{
@@ -1130,22 +1190,88 @@ namespace SJson
 		return node;
 	}
 
-	/**
-	 * @brief If is a map of string-value pairs, we can convert them to a JSON array
-	 * @tparam T
-	 * @param v
-	 * @return
-	*/
+	template<typename T, std::enable_if_t<std::is_enum<T>::value, nullptr_t> = nullptr>
+	constexpr JsonNode serialize(const T& v)
+	{
+		// If is a vector of elements, we can convert them to a JSON array
+		return SJson::JsonNode(enum_mapper<T>::map(v));
+	}
+
+	template<typename, typename = void>
+	struct is_type_complete : public std::false_type {};
+
 	template<typename T>
-	constexpr SJson::JsonNode serialize(const std::map<const std::string, T>& v)
+	struct is_type_complete
+		<T, std::void_t<decltype(sizeof(T))>> : public std::true_type {};
+
+	template<typename T, typename = void>
+	constexpr bool is_parent_defined = false;
+
+	template<typename T>
+	constexpr bool is_parent_defined<T, decltype(T::parents, void())> = true;
+
+	template<typename T, std::enable_if_t<has_properties<T>::value, nullptr_t> = nullptr>
+	constexpr JsonNode serialize(const T& v)
+	{
+		SJson::JsonNode json;
+		// We first get the number of properties
+		constexpr auto nbProperties = std::tuple_size<decltype(T::properties())>::value;
+
+		// We iterate on the index sequence of size `nbProperties`
+		for_sequence(std::make_index_sequence<nbProperties>{}, [&](auto i) {
+			// get the property
+			constexpr auto property = std::get<i>(T::properties());
+
+			// set the value to the member
+			json[property.name] = serialize(v.*(property.member));
+			});
+
+		if constexpr (is_parent_defined<T>)
+		{
+			constexpr auto nParents = std::tuple_size<decltype(T::parents())>::value;
+			for_sequence(std::make_index_sequence<nParents>{}, [&json, &v](auto i) {
+				constexpr auto classRef = std::get<i>(T::parents());
+
+				std::string key = "$";
+				key.append(classRef.name);
+				json[key] = serialize(static_cast<const decltype(classRef)::Type&>(v));
+			});
+		}
+		return json;
+	}
+
+	template<typename K, typename V>
+	constexpr SJson::JsonNode serialize(const std::pair<K, V>& v)
 	{
 		SJson::JsonNode node = SJson::object({});
-		for (auto& pair : v)
-		{
-			node[pair.first] = pair.second;
-		}
+		node["key"] = serialize(v.first);
+		node["value"] = serialize(v.second);
 		return node;
 	}
+
+	template<bool _To_Obj = false, typename K, typename V, typename Cmp, typename Alloc>
+	constexpr SJson::JsonNode serialize(const std::map<K, V, Cmp, Alloc>& v)
+	{
+		if constexpr (_To_Obj && std::is_same<std::decay_t<K>, std::string>::value)
+		{
+			SJson::JsonNode node = SJson::object({});
+			for (auto& pair : v)
+			{
+				node[pair.first] = serialize(pair.second);
+			}
+			return node;
+		}
+		else
+		{
+			SJson::JsonNode node = SJson::array({});
+			for (auto& pair : v)
+			{
+				node.push_back(serialize<K, V>(pair));
+			}
+			return node;
+		}
+	}
+
 
 	/**
 	 * @brief If is a string, we can convert it to a JSON string value
@@ -1174,33 +1300,21 @@ namespace SJson
 		return json;
 	}
 
-	template<typename Class>
-	constexpr std::enable_if_t<std::is_object<decltype(Class::properties())>::value, SJson::JsonNode>
-		serialize(const Class& v)
-	{
-		SJson::JsonNode json;
-		// We first get the number of properties
-		constexpr auto nbProperties = std::tuple_size<decltype(Class::properties())>::value;
-
-		// We iterate on the index sequence of size `nbProperties`
-		for_sequence(std::make_index_sequence<nbProperties>{}, [&](auto i) {
-			// get the property
-			constexpr auto property = std::get<i>(Class::properties());
-
-			// set the value to the member
-			json[property.name] = serialize(v.*(property.member));
-			});
-		return json;
-	}
+	//template<typename Class>
+	//constexpr std::enable_if_t<std::is_object<decltype(Class::properties())>::value, SJson::JsonNode>
+	//	serialize(const Class& v)
+	//{
+	//	
+	//}
 
 	//
 	// De-serialization
 	// 反序列化
 	// 
 
-	template <typename T>
-	using is_vector = std::is_same<T, std::vector<typename T::value_type,
-		typename T::allocator_type>>;
+	//template <typename T>
+	//using is_vector = std::is_same<T, std::vector<typename T::value_type,
+	//	typename T::allocator_type>>;
 
 	/**
 	 * @brief If is primitive types, we can directly get value from JSON
@@ -1215,15 +1329,14 @@ namespace SJson
 		{
 			return node.Get<T>();
 		}
-		//else if constexpr (std::is_same<T, std::vector<typename T::value_type,
-		//	typename T::allocator_type>>)
-		//{
-		//	T vec;
-		//	node.foreach([&](const JsonNode& e) {
-		//		vec.push_back(de_serialize<T::value_type>(e));
-		//		});
-		//	return vec;
-		//}
+		else if constexpr (is_vector<T>::value)
+		{
+			T vec;
+			node.foreach([&](const JsonNode& e) {
+				vec.push_back(de_serialize<T::value_type>(e));
+				});
+			return vec;
+		}
 		else if constexpr (std::is_object<decltype(T::properties())>::value)
 		{
 			T result;
@@ -1236,7 +1349,7 @@ namespace SJson
 				constexpr auto prop = std::get<i>(T::properties());
 
 				// set the value to the member
-				result.*(prop.member) = node[prop.name].Get<decltype(prop)::Type>();
+				result.*(prop.member) = de_serialize<decltype(prop)::Type>(node[prop.name]);
 				});
 			return result;
 		}
