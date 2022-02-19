@@ -541,85 +541,45 @@ static void test_parse() {
     test_parse_json();
 }
 
-class Internal
-{
-public:
-    int A;
-    float B;
-    constexpr static auto properties()
-    {
-        return std::make_tuple(
-            PROPERTY(Internal, A),
-            PROPERTY(Internal, B)
-        );
-    }
-};
-
-class TestObject
-{
-public:
-    int			Age;
-    float		Weight;
-    //std::string	Name;
-    //bool		IsMale;
-    //Internal	Inter;
-    //std::vector<Internal> ss;
-
-    constexpr static auto properties()
-    {
-        return std::make_tuple(
-            PROPERTY(TestObject, Age),
-            PROPERTY(TestObject, Weight)
-            //PROPERTY(TestObject, Name),
-            //PROPERTY(TestObject, IsMale),
-            //PROPERTY(TestObject, Inter),
-            //PROPERTY(TestObject, ss)
-        );
-    }
-};
-
-
 int main()
 {
-
+    auto a = SJson::JsonNode(1.3f);
 
     SJson::JsonNode node = SJson::object({
         {"Name", "DXTsT"},
         {"Age", 21},
         {"Company", "Microsoft"},
-        {"Object", {1, 2, 3}},
+        {std::string("Object"), {1, 2, 3}},
         {"Test", SJson::array({1, 2, "123", false})},
         });
     printf("%s\n", SJson::GetValueTypeName(node.GetType()).c_str());
 
-    //SJson::JsonFormatOption option = {};
-    //option.Inline = false;
-    //option.KeysWithQuotes = true;
-    //option.UseTab = false;
-    //printf("%s\n", node.ToString(option).c_str());
-
-    TestObject obj = {};
-    //obj.ss = { {1, 3.14}, {2, 6.28} };
-    //int TestObject::* a = nullptr;
-    //a.
-    //SJson::JsonNode json = toJson<TestObject>(obj);
-    //printf("%s\n", json.ToString(SJson::DocumentOption).c_str());
-    //property(&TestObject::Weight, "Weight");
-    std::map<const std::string, int> mapp = { {"a", 1}, {"b", 2}, {"c", 3} };
-    std::vector<int> arr = { 1342, 593, 114514, 1919810 };
-    std::string str = "Hello";
-    std::tuple<int, float, std::string> tup = { 1, 3.14, "hello" };
-
-    auto value = SJson::de_serialize<int8_t>(SJson::JsonNode(244));
-    auto value1 = SJson::de_serialize<TestObject>(SJson::object({
-        {"Age", 21}, {"Weight", 100.0}}));
-    printf("%d\n", value);
-
-    printf("%s\n", SJson::serialize(obj).ToString(SJson::DocumentOption).c_str());
+    SJson::JsonFormatOption option = {};
+    option.Inline = false;
+    option.KeysWithQuotes = true;
+    option.UseTab = false;
+    printf("%s\n", node.ToString(option).c_str());
 
     try
     {
         auto node = SJson::JsonConvert::Parse(R"([1, 2, 3, [], []])");
+    
+//        auto node1 = SJson::JsonConvert::Parse(R"({
+//  "Age": 21,
+//  "Company": "Microsoft",
+//  "Name": "DXTsT",
+//  "Object": [
+//    1,
+//    2,
+//    3
+//  ],
+//  "Test": [
+//    1,
+//    2,
+//    "123",
+//    false
+//  ]
+//})");
     }
     catch (const std::exception& ex)
     {

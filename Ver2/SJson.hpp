@@ -5,10 +5,13 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <tuple>
 #include <functional>
 #include <variant>
 #include <initializer_list>
 #include <cassert>
+#include <type_traits>
+
 
 namespace std
 {
@@ -44,14 +47,17 @@ namespace SJson
 	enum class TokenType : uint8_t
 	{
 		Null,           // Token: "null"
-		Boolean,        // Token: "true" / "false" 
-		Number,         // Token: (+|-)?[0-9]+ / (+|-)?[0-9]+.[0-9]+ / (+|-)?[0-9]+.[0-9]+e(+|-)?[0-9]+
+		True,			// Token: "true"
+		False,			// Token: "false"
+		Integer,        // Token: (+|-)?[0-9]+ 
+		Float,			// Token: (+|-)?[0-9]+.[0-9]+ / (+|-)?[0-9]+.[0-9]+e(+|-)?[0-9]+
 		String,			// Token: "\".*\""
 		LeftBrace,		// Token: "{"
 		RightBrace,		// Token: "}"
 		LeftBracket,	// Token: "["  
 		RightBracket,   // Token: "]"
 		Comma,			// Token: ","
+		Colon,			// Token: ":"
 		Comment,		// Token: "#"
 		EndOfFile,		// Token: EOF
 		Unknown,		// error token
@@ -61,13 +67,15 @@ namespace SJson
 
 	using array_type = std::vector<JsonNode>;
 	using object_type = std::map<std::string, JsonNode>;
+	using array_type_init = std::initializer_list<JsonNode>;
+	using object_type_init = std::initializer_list<std::pair<const std::string, JsonNode>>;
 
 	using JsonValue = std::variant<
-	    std::monostate,
-	    int64_t,
-	    double,
-	    bool,
-	    std::string,
+		std::monostate,
+		int64_t,
+		double,
+		bool,
+		std::string,
 		array_type,
 		object_type
 	>;
@@ -81,35 +89,42 @@ namespace SJson
 	template <typename T>
 	using t_enable_if_floating_type = std::enable_if_t<std::is_floating_point<std::decay_t<T>>::value, nullptr_t>;
 
-	template <typename T>
-	using t_enable_if_string_type = std::enable_if_t<std::is_floating_point<std::decay_t<T>>::value, nullptr_t>;
-
 	/**
-	 * @brief 
-	 * @param type 
-	 * @return 
+	 * @brief
+	 * @param type
+	 * @return
 	*/
 	std::string GetValueTypeName(ValueType type);
 
 	/**
-	 * @brief 
-	 * @param list 
-	 * @return 
+	 * @brief
+	 * @param list
+	 * @return
 	*/
 	JsonNode object(std::initializer_list<std::pair<const std::string, JsonNode>> list);
 
 	/**
-	 * @brief 
-	 * @param list 
-	 * @return 
+	 * @brief
+	 * @param list
+	 * @return
 	*/
 	JsonNode array(std::initializer_list<JsonNode> list);
+
+
+	/**
+	 * @brief
+	 * @param tokens
+	 * @param index
+	 * @param newIndex
+	 * @return
+	*/
+	JsonNode parse(const std::vector<JsonToken>& tokens, int index, int& newIndex);
 
 
 	class JsonConvert
 	{
 	public:
-		static std::shared_ptr<JsonNode> Parse(const std::string& text);
+		static JsonNode Parse(const std::string& text);
 		static std::string Serialize(const JsonNode& node);
 	};
 
@@ -119,6 +134,9 @@ namespace SJson
 		bool		UseTab;				// True if we use tab to indent
 		bool		KeysWithQuotes;		// True if we want keys to have quotes
 	};
+
+	const JsonFormatOption DefaultOption = { true, false, false };
+	const JsonFormatOption DocumentOption = { false, false, true };
 
 	// using JsonValue = void*;
 	class JsonNode
@@ -133,16 +151,38 @@ namespace SJson
 		JsonNode(T value, t_enable_if_floating_type<T> = nullptr);
 		JsonNode(const char* value);
 		JsonNode(const std::string& value);
-		JsonNode(std::initializer_list<JsonNode> list);
-		JsonNode(std::initializer_list<std::pair<const std::string, JsonNode>> list);
+		JsonNode(array_type_init list);
+		JsonNode(object_type_init list);
 
 		~JsonNode();
+
+		//template<typename T, t_enable_if_integral_type<T> = nullptr>
+		//T Get() const;
+
+		//template<typename T, t_enable_if_same_type<T, bool> = nullptr>
+		//T Get() const;
+
+		//template<typename T, t_enable_if_floating_type<T> = nullptr>
+		//T Get() const;
+		//
+		//template<typename T, t_enable_if_same_type<T, std::string> = nullptr>
+		//T Get() const;
 
 		template<typename T>
 		T Get() const;
 
 		ValueType GetType() const { return m_type; }
 		std::string ToString(const JsonFormatOption& format) const;
+
+		void foreach(std::function<void(const JsonNode&)> action) const;
+
+		void push_back(JsonNode&& node);
+		void push_back(const JsonNode& node);
+
+		JsonNode& operator[](const std::string& name);
+		const JsonNode& operator[](const std::string& name) const;
+		JsonNode& operator[](size_t index);
+		const JsonNode& operator[](size_t index) const;
 	private:
 		ValueType m_type;
 		JsonValue m_value;
@@ -190,55 +230,44 @@ namespace SJson
 	{
 	}
 
-	JsonNode::JsonNode(std::initializer_list<JsonNode> list)
+	inline JsonNode::JsonNode(array_type_init list)
 		: m_type(ValueType::Array), m_value(array_type(list))
 	{
 	}
 
-	JsonNode::JsonNode(std::initializer_list<std::pair<const std::string, JsonNode>> list)
+	inline JsonNode::JsonNode(object_type_init list)
 		: m_type(ValueType::Object), m_value(object_type(list))
 	{
 	}
 
+	//template<typename T>
+	//inline T JsonNode::Get() const
+	//{
+	//	static_assert(false, "Cannot get an un-supportted type");
+	//}
+
 	template<typename T>
 	inline T JsonNode::Get() const
 	{
-		static_assert(false, "Cannot get an un-supportted type");
-	}
-
-	template<>
-	inline int JsonNode::Get() const
-	{
-		assert(m_type == ValueType::Integer);
-		return std::get<int64_t>(m_value);
-	}
-
-	template<>
-	inline int64_t JsonNode::Get() const
-	{
-		assert(m_type == ValueType::Integer);
-		return std::get<int64_t>(m_value);
-	}
-
-	template<>
-	inline float JsonNode::Get() const
-	{
-		assert(m_type == ValueType::Float);
-		return std::get<double>(m_value);
-	}
-
-	template<>
-	inline double JsonNode::Get() const
-	{
-		assert(m_type == ValueType::Float);
-		return std::get<double>(m_value);
-	}
-
-	template<>
-	inline bool JsonNode::Get() const
-	{
-		assert(m_type == ValueType::Boolean);
-		return std::get<bool>(m_value);
+		if constexpr (std::is_same<std::decay_t<T>, bool>::value)
+		{
+			assert(m_type == ValueType::Boolean);
+			return std::get<bool>(m_value);
+		}
+		else if constexpr (std::is_integral<std::decay_t<T>>::value && !std::is_same<std::decay_t<T>, bool>::value)
+		{
+			assert(m_type == ValueType::Integer);
+			return static_cast<T>(std::get<int64_t>(m_value));
+		}
+		else if constexpr (std::is_floating_point<std::decay_t<T>>::value)
+		{
+			assert(m_type == ValueType::Float);
+			return static_cast<T>(std::get<double>(m_value));
+		}
+		else
+		{
+			static_assert(false, "Cannot get an un-supportted type");
+		}
 	}
 
 	template<>
@@ -248,10 +277,103 @@ namespace SJson
 		return std::get<std::string>(m_value);
 	}
 
+	//template<typename T, t_enable_if_same_type<T, bool>>
+	//inline T JsonNode::Get() const
+	//{
+	//	assert(m_type == ValueType::Boolean);
+	//	return std::get<bool>(m_value);
+	//}
+
+	//template<typename T, t_enable_if_floating_type<T>>
+	//inline T JsonNode::Get() const
+	//{
+	//	assert(m_type == ValueType::Float);
+	//	return static_cast<T>(std::get<double>(m_value));
+	//}
+
+	//template<typename T, t_enable_if_same_type<T, std::string>>
+	//inline T JsonNode::Get() const
+	//{
+	//	assert(m_type == ValueType::String);
+	//	return std::get<std::string>(m_value);
+	//}
+	//template<>
+	//inline int JsonNode::Get() const
+	//{
+	//	assert(m_type == ValueType::Integer);
+	//	return std::get<int64_t>(m_value);
+	//}
+
+	//template<>
+	//inline int64_t JsonNode::Get() const
+	//{
+	//	assert(m_type == ValueType::Integer);
+	//	return std::get<int64_t>(m_value);
+	//}
+
+
+
 	std::string JsonNode::ToString(const JsonFormatOption& format) const
 	{
 		return internal_tostring(format, 0);
 	}
+
+	inline void JsonNode::foreach(std::function<void(const JsonNode&)> action) const
+	{
+		assert(m_type == ValueType::Array);
+		for (auto& element : std::get<array_type>(m_value))
+		{
+			action(element);
+		}
+	}
+
+	inline void JsonNode::push_back(JsonNode&& node)
+	{
+		assert(m_type == ValueType::Array);
+		std::get<array_type>(m_value).push_back(std::move(node));
+	}
+
+	inline void JsonNode::push_back(const JsonNode& node)
+	{
+		assert(m_type == ValueType::Array);
+		std::get<array_type>(m_value).push_back(node);
+	}
+
+	inline JsonNode& JsonNode::operator[](const std::string& name)
+	{
+		if (m_type == ValueType::Null)
+		{
+			m_type = ValueType::Object;
+			m_value = object_type();
+		}
+		assert(m_type == ValueType::Object);
+		return std::get<object_type>(m_value)[name];
+	}
+
+	inline const JsonNode& JsonNode::operator[](const std::string& name) const
+	{
+		assert(m_type == ValueType::Object);
+		auto& map = std::get<object_type>(m_value);
+		auto it = map.find(name);
+		if (it == map.end())
+		{
+			throw std::logic_error("Given key does not exist");
+		}
+		return it->second;
+	}
+
+	inline JsonNode& JsonNode::operator[](size_t index)
+	{
+		assert(m_type == ValueType::Array);
+		return std::get<array_type>(m_value)[index];
+	}
+
+	inline const JsonNode& JsonNode::operator[](size_t index) const
+	{
+		assert(m_type == ValueType::Array);
+		return std::get<array_type>(m_value)[index];
+	}
+
 
 	inline std::string JsonNode::internal_tostring(const JsonFormatOption& format, int level) const
 	{
@@ -405,7 +527,7 @@ namespace SJson
 	public:
 		explicit parse_error(const std::string& reason, const JsonToken& token)
 		{
-			int left = std::max(token.Position - 10, 0);			
+			int left = std::max(token.Position - 10, 0);
 			int right = std::min(token.Position + 10, (int)token.OriginalText->size() - 1);
 			std::string view = token.OriginalText->substr(left, right - left + 1);
 			std::string viewptr = "";
@@ -440,7 +562,7 @@ namespace SJson
 		{
 			if (index + i >= len || text[index + i] != word[i]) return -1;
 		}
-		return index + lenWord;
+		return index + lenWord - 1;
 	}
 
 	inline int lex_remove_whole_line(const std::string& text, int index)
@@ -451,7 +573,7 @@ namespace SJson
 		{
 			i++;
 		}
-		return i + 1;
+		return i;
 	}
 
 	inline int try_lex_string(const std::string& text, int index)
@@ -467,54 +589,96 @@ namespace SJson
 			//throw parse_error("Unexpected EOF while parsing string", JsonToken{ "", TokenType::String, i, });
 			return -1;
 		}
-		return i + 1;
+		return i;
 	}
 
-	inline int try_lex_number(const std::string& text, int index)
+
+	struct DFAState
 	{
+		std::string					Name;
+		std::function<int(char c)>	T;
+		bool						Accept;
+	};
+
+	inline int try_lex_number(const std::string& text, int index, bool& integer)
+	{
+		static std::vector<DFAState> dfa = {
+			DFAState{ "Init",[](char c)
+			{
+				if (isdigit(c)) return 2;
+				else if (c == '+' || c == '-') return 1;
+				else if (c == '.') return 3;
+				return -1;
+			}, false},
+			DFAState{ "Num 0",[](char c)
+			{
+				if (isdigit(c)) return 2;
+				else if (c == '.') return 3;
+				return -1;
+			}, false},
+			DFAState{ "Num 1",[](char c)
+			{
+				if (isdigit(c)) return 2;
+				else if (c == '.') return 4;
+				else if (c == 'e' || c == 'E') return 5;
+				return -1;
+			}, true},
+			DFAState{ "Dot 0",[](char c)
+			{
+				if (isdigit(c)) return 4;
+				return -1;
+			}, false},
+			DFAState{ "Dot 1",[](char c)
+			{
+				if (isdigit(c)) return 4;
+				if (c == 'e' || c == 'E') return 5;
+				return -1;
+			}, true},
+			DFAState{ "Exp 0",[](char c)
+			{
+				if (isdigit(c)) return 7;
+				if (c == '+' || c == '-') return 6;
+				return -1;
+			}, false},
+			DFAState{ "Exp 0.5",[](char c)
+			{
+				if (isdigit(c)) return 7;
+				return -1;
+			}, false},
+			DFAState{ "Exp 1",[](char c)
+			{
+				if (isdigit(c)) return 7;
+				return -1;
+			}, true},
+		};
+
 		auto len = text.size();
-		char c = text[index];
+		int dfaPtr = 0;
 		int i = index;
-
-		int state = 0;
-		if (c != '+' && c != '-' && c != '.' && !isdigit(c)) return -1;
-		
-		if (!isdigit(c))
-		{
-			i++;
-		}
-		if (c == '.')
-		{
-			state = 1;
-		}
-
+		integer = true;
 		for (; i < len; i++)
 		{
-			char ch = text[i];
-			if (is_white_space(ch))
+			auto& curState = dfa[dfaPtr];
+			int nxt = curState.T(text[i]);
+			if (nxt == -1)
 			{
-				break;
-			}
-			if (state == 0)
-			{
-				if (!isdigit(ch) && ch != '.')
+				if (curState.Accept)
 				{
-					return -1;
+					return i - 1;
 				}
-				else if (ch == '.')
-				{
-					state = 1;
-				}
-			}
-			else if (state == 1)
-			{
-				if (!isdigit(ch))
+				else
 				{
 					return -1;
 				}
 			}
+			if (nxt == 4 || nxt == 7)
+			{
+				integer = false;
+			}
+			dfaPtr = nxt;
 		}
-		return i;
+		if (!dfa[dfaPtr].Accept) return -1;
+		return i - 1;
 	}
 
 	inline int try_lex(const std::string& text, int index, JsonToken& token)
@@ -528,7 +692,7 @@ namespace SJson
 		{
 			if ((newIndex = try_lex_keyword(text, index, "null")) != -1)
 			{
-				token.Value = "null";
+				token.Value = "";
 				token.Token = TokenType::Null;
 			}
 		}
@@ -537,8 +701,8 @@ namespace SJson
 		{
 			if ((newIndex = try_lex_keyword(text, index, "true")) != -1)
 			{
-				token.Value = "true";
-				token.Token = TokenType::Boolean;
+				token.Value = "";
+				token.Token = TokenType::True;
 			}
 		}
 		break;
@@ -546,44 +710,51 @@ namespace SJson
 		{
 			if ((newIndex = try_lex_keyword(text, index, "false")) != -1)
 			{
-				token.Value = "false";
-				token.Token = TokenType::Boolean;
+				token.Value = "";
+				token.Token = TokenType::False;
 			}
 		}
 		break;
 		case '{':
 		{
-			newIndex = index + 1;
+			newIndex = index;
 			token.Value = c;
 			token.Token = TokenType::LeftBrace;
 		}
 		break;
 		case '}':
 		{
-			newIndex = index + 1;
+			newIndex = index;
 			token.Value = c;
 			token.Token = TokenType::RightBrace;
 		}
 		break;
 		case '[':
 		{
-			newIndex = index + 1;
+			newIndex = index;
 			token.Value = c;
 			token.Token = TokenType::LeftBracket;
 		}
 		break;
 		case ']':
 		{
-			newIndex = index + 1;
+			newIndex = index;
 			token.Value = c;
 			token.Token = TokenType::RightBracket;
 		}
 		break;
 		case ',':
 		{
-			newIndex = index + 1;
+			newIndex = index;
 			token.Value = c;
 			token.Token = TokenType::Comma;
+		}
+		break;
+		case ':':
+		{
+			newIndex = index;
+			token.Value = c;
+			token.Token = TokenType::Colon;
 		}
 		break;
 		case '#':
@@ -597,17 +768,18 @@ namespace SJson
 		{
 			if ((newIndex = try_lex_string(text, index)) != -1)
 			{
-				token.Value = text.substr(index + 1, newIndex - 1 - index);
+				token.Value = text.substr(index + 1, newIndex - index - 1);
 				token.Token = TokenType::String;
 			}
 		}
 		break;
 		default:
 		{
-			if ((newIndex = try_lex_number(text, index)) != -1)
+			bool integer;
+			if ((newIndex = try_lex_number(text, index, integer)) != -1)
 			{
-				token.Value = text.substr(index, newIndex - index);
-				token.Token = TokenType::Number;
+				token.Value = text.substr(index, newIndex - index + 1);
+				token.Token = integer ? TokenType::Integer : TokenType::Float;
 			}
 		}
 		break;
@@ -615,7 +787,7 @@ namespace SJson
 		return newIndex;
 	}
 
-	std::vector<JsonToken> lex(const std::string& text)
+	inline std::vector<JsonToken> lex(const std::string& text)
 	{
 		std::vector<JsonToken> tokenList;
 		auto originalText = std::make_shared<std::string>(text);
@@ -631,7 +803,7 @@ namespace SJson
 			int newIndex = try_lex(text, i, token);
 			if (newIndex != -1)
 			{
-				i = newIndex - 1;
+				i = newIndex;
 				if (token.Token == TokenType::Comment)
 				{
 					continue;
@@ -651,10 +823,212 @@ namespace SJson
 		return tokenList;
 	}
 
-	std::shared_ptr<JsonNode> JsonConvert::Parse(const std::string& text)
+	int expect(const JsonToken& token, TokenType type, int index)
+	{
+		if (token.Token != type)
+		{
+			throw parse_error("Expected token #", token);
+		}
+		return index + 1;
+	}
+
+	using maplist = std::vector<std::pair<const std::string, JsonNode>>;
+	using m_pair = std::pair<const std::string, JsonNode>;
+	using arrlist = std::vector<JsonNode>;
+
+	maplist parse_object(const std::vector<JsonToken>& tokens,
+		int index, int& newIndex)
+	{
+
+		maplist list;
+		int curIndex = index;
+		if (tokens[curIndex].Token != TokenType::RightBrace)
+		{
+			while (true)
+			{
+				auto& keyToken = tokens[curIndex++];
+				if (keyToken.Token != TokenType::String)
+				{
+					throw parse_error("Expected keys to be string", keyToken);
+				}
+				const std::string key = keyToken.Value;
+
+				curIndex = expect(tokens[curIndex], TokenType::Colon, curIndex);
+				int nxtIndex;
+				auto value = parse(tokens, curIndex, nxtIndex);
+				curIndex = nxtIndex;
+
+				list.push_back(m_pair{ key, value });
+
+				if (tokens[curIndex].Token == TokenType::Comma)
+				{
+					curIndex++;
+				}
+				else
+				{
+					break;
+				}
+			}
+			newIndex = expect(tokens[curIndex], TokenType::RightBrace, curIndex);
+			return list;
+		}
+		else
+		{
+			newIndex = index + 1;
+			return list;
+		}
+	}
+
+	arrlist parse_array(const std::vector<JsonToken>& tokens,
+		int index, int& newIndex)
+	{
+		arrlist list;
+		int curIndex = index;
+		if (tokens[curIndex].Token != TokenType::RightBracket)
+		{
+			while (true)
+			{
+				int nxtIndex;
+				list.push_back(parse(tokens, curIndex, nxtIndex));
+				curIndex = nxtIndex;
+				if (tokens[curIndex].Token == TokenType::Comma)
+				{
+					curIndex++;
+				}
+				else
+				{
+					break;
+				}
+			}
+			newIndex = expect(tokens[curIndex], TokenType::RightBracket, curIndex);
+			return list;
+		}
+		else
+		{
+			newIndex = index + 1;
+			return list;
+		}
+	}
+
+	inline std::string remove_escapes(const std::string& str, const JsonToken& token)
+	{
+		std::string result;
+		int len = str.size();
+		for (int i = 0; i < len; i++)
+		{
+			if (str[i] != '\\')
+			{
+				result.push_back(str[i]);
+				continue;
+			}
+			if (str[i] == '\\')
+			{
+				if (i == len - 1)
+				{
+					throw parse_error("Invalid escape character", token);
+				}
+				switch (str[i + 1])
+				{
+				case 'n':
+					result.push_back('\n');
+					i++;
+					break;
+				case 'r':
+					result.push_back('\r');
+					i++;
+					break;
+				case 't':
+					result.push_back('\t');
+					i++;
+					break;
+				case '\\':
+					result.push_back('\\');
+					i++;
+					break;
+				default:
+					throw parse_error("Invalid escape character", token);
+					break;
+				}
+			}
+		}
+		return result;
+	}
+
+	JsonNode parse(const std::vector<JsonToken>& tokens, int index, int& newIndex)
+	{
+		auto& token = tokens[index];
+		switch (token.Token)
+		{
+		case TokenType::Null:
+		{
+			newIndex = index + 1;
+			return JsonNode();
+		}
+		case TokenType::Integer:
+		{
+			newIndex = index + 1;
+			size_t num;
+			return JsonNode(std::stoll(token.Value, &num, 10));
+		}
+		case TokenType::Float:
+		{
+			newIndex = index + 1;
+			size_t num;
+			return JsonNode(std::stod(token.Value, &num));
+		}
+		case TokenType::True:
+		{
+			newIndex = index + 1;
+			return JsonNode(true);
+		}
+		case TokenType::False:
+		{
+			newIndex = index + 1;
+			return JsonNode(false);
+		}
+		case TokenType::String:
+		{
+			newIndex = index + 1;
+			return JsonNode(remove_escapes(token.Value, token));
+		}
+		case TokenType::LeftBrace:
+		{
+			JsonNode node = JsonNode(object_type_init());
+			for (auto& pair : parse_object(tokens, index + 1, newIndex))
+			{
+				node[pair.first] = pair.second;
+			}
+			return node;
+		}
+		case TokenType::LeftBracket:
+		{
+			JsonNode node = JsonNode(array_type_init());
+			for (auto& element : parse_array(tokens, index + 1, newIndex))
+			{
+				node.push_back(element);
+			}
+			return node;
+		}
+		case TokenType::EndOfFile:
+		{
+			throw parse_error("Unexpected EOF!", token);
+		}
+		default:
+			break;
+		}
+		throw parse_error("Failed to parse", token);
+	}
+
+	JsonNode JsonConvert::Parse(const std::string& text)
 	{
 		auto tokens = lex(text);
-		return std::shared_ptr<JsonNode>();
+		int index = 0;
+		auto node = parse(tokens, 0, index);
+		if (tokens[index].Token != TokenType::EndOfFile)
+		{
+			throw parse_error("Root not singluar", tokens[index]);
+		}
+		return node;
 	}
 
 	std::string JsonConvert::Serialize(const JsonNode& node)
@@ -697,329 +1071,184 @@ namespace SJson
 		return JsonNode(list);
 	}
 
-	//std::string SJsonGetNodeTypeName(SJsonNodeType type);
+	//
+	// Serialization
+	// 序列化
+	// 
 
-	//class ParseError : public std::exception
-	//{
-	//public:
-	//	explicit ParseError(const char* name, int line, int col) : std::exception(name), _line(line), _col(col)
-	//	{
-	//	}
-	//	int GetLine() const { return _line; }
-	//	int GetCol() const { return _col; }
-	//private:
-	//	int _line, _col;
-	//};
+#define PROPERTY(type, member) SJson::property(&type::member, #member)
+	template<typename Class, typename T>
+	struct PropertyImpl
+	{
+		constexpr PropertyImpl(T Class::* aMember, const char* aName) : member{ aMember }, name{ aName } {}
 
-	//class RootNotSingularError : public ParseError
-	//{
-	//public:
-	//	explicit RootNotSingularError(int line, int col) : ParseError("RootNotSingularError", line, col) {}
-	//};
+		using Type = T;
 
-	//class ExpectValueError : public ParseError
-	//{
-	//public:
-	//	explicit ExpectValueError(int line, int col) : ParseError("ExpectValueError", line, col) {}
-	//};
+		T Class::* member;
+		const char* name;
+	};
 
-	//class InvalidValueError : public ParseError
-	//{
-	//public:
-	//	explicit InvalidValueError(int line, int col) : ParseError("InvalidValueError", line, col) {}
-	//};
+	template<typename Class, typename T>
+	constexpr auto property(T Class::* member, const char* name)
+	{
+		return PropertyImpl<Class, T>{member, name};
+	}
 
-	//class UnexpectedTokenError : public ParseError
-	//{
-	//public:
-	//	explicit UnexpectedTokenError(int line, int col, const std::string& c) : ParseError("UnexpectedTokenError", line, col), token(c) {}
-	//	std::string token;
-	//};
+	template <typename T, T... S, typename F>
+	constexpr void for_sequence(std::integer_sequence<T, S...>, F&& f)
+	{
+		(static_cast<void>(f(std::integral_constant<T, S>{})), ...);
+	}
 
-	//class ExpectTokenError : public ParseError
-	//{
-	//public:
-	//	explicit ExpectTokenError(int line, int col, const std::string& c, const std::string& cur) : ParseError("ExpectTokenError", line, col), token(c), curToken(cur) {}
-	//	std::string token, curToken;
-	//};
+	/**
+	 * @brief If is primitive types, we can convert it directly to a JSON value
+	 * @tparam T
+	 * @param v
+	 * @return
+	*/
+	template<typename T>
+	constexpr std::enable_if_t<std::is_fundamental<T>::value, SJson::JsonNode>
+		serialize(const T& v)
+	{
+		return SJson::JsonNode(v);
+	}
 
-	//class OperationError : public std::exception
-	//{
-	//public:
-	//	explicit OperationError(const char* name) : std::exception(name) {}
-	//};
+	/**
+	 * @brief If is a vector of elements, we can convert them to a JSON array
+	 * @tparam T
+	 * @param v
+	 * @return
+	*/
+	template<typename T>
+	constexpr SJson::JsonNode serialize(const std::vector<T>& v)
+	{
+		SJson::JsonNode node = SJson::array({});
+		for (auto& e : v)
+		{
+			node.push_back(serialize(e));
+		}
+		return node;
+	}
 
-	//class ConversionError : public OperationError
-	//{
-	//public:
-	//	explicit ConversionError(const std::string& fr, const std::string& to) : OperationError("Conversion Error"),
-	//		from(fr), to(to)
-	//	{
-	//	}
-	//	std::string from, to;
-	//};
+	/**
+	 * @brief If is a map of string-value pairs, we can convert them to a JSON array
+	 * @tparam T
+	 * @param v
+	 * @return
+	*/
+	template<typename T>
+	constexpr SJson::JsonNode serialize(const std::map<const std::string, T>& v)
+	{
+		SJson::JsonNode node = SJson::object({});
+		for (auto& pair : v)
+		{
+			node[pair.first] = pair.second;
+		}
+		return node;
+	}
 
-	//class MissingMemberError : public OperationError
-	//{
-	//public:
-	//	explicit MissingMemberError(const std::string& s) : OperationError("Member Not Found Error"),
-	//		member(s)
-	//	{
-	//	}
-	//	std::string member;
-	//};
+	/**
+	 * @brief If is a string, we can convert it to a JSON string value
+	 * @param v
+	 * @return
+	*/
+	inline SJson::JsonNode serialize(const std::string& v)
+	{
+		return SJson::JsonNode(v);
+	}
 
+	/**
+	 * @brief If it is a tuple of elements, we can convert it to a JSON array
+	 * @tparam ...Ts
+	 * @param v
+	 * @return
+	*/
+	template<typename... Ts>
+	constexpr SJson::JsonNode serialize(const std::tuple<Ts...>& v)
+	{
+		SJson::JsonNode json = SJson::array({});
+		constexpr auto numTypes = sizeof...(Ts);
+		for_sequence(std::make_index_sequence<numTypes>{}, [&](auto i) {
+			json.push_back(serialize(std::get<i>(v)));
+			});
+		return json;
+	}
 
-	///// <summary>
-	///// SJsonNode 是Json节点的基类，包含各种取值判断操作
-	///// </summary>
-	//class SJsonNode
-	//{
-	//public:
-	//	SJsonNode() = default;
-	//	virtual ~SJsonNode() = 0 {}
+	template<typename Class>
+	constexpr std::enable_if_t<std::is_object<decltype(Class::properties())>::value, SJson::JsonNode>
+		serialize(const Class& v)
+	{
+		SJson::JsonNode json;
+		// We first get the number of properties
+		constexpr auto nbProperties = std::tuple_size<decltype(Class::properties())>::value;
 
-	//	virtual SJsonNodeType GetType() const = 0;
+		// We iterate on the index sequence of size `nbProperties`
+		for_sequence(std::make_index_sequence<nbProperties>{}, [&](auto i) {
+			// get the property
+			constexpr auto property = std::get<i>(Class::properties());
 
-	//	virtual bool IsNull() const { return false; }
+			// set the value to the member
+			json[property.name] = serialize(v.*(property.member));
+			});
+		return json;
+	}
 
-	//	virtual ll GetInt() const
-	//	{
-	//		throw ConversionError(SJsonGetNodeTypeName(GetType()), SJsonGetNodeTypeName(SJsonNodeType::JSON_INT));
-	//	}
-	//	virtual double GetFloat() const
-	//	{
-	//		throw ConversionError(SJsonGetNodeTypeName(GetType()), SJsonGetNodeTypeName(SJsonNodeType::JSON_FLOAT));
-	//	}
-	//	virtual bool GetBool() const
-	//	{
-	//		throw ConversionError(SJsonGetNodeTypeName(GetType()), SJsonGetNodeTypeName(SJsonNodeType::JSON_BOOL));
-	//	}
-	//	virtual std::string GetString() const
-	//	{
-	//		throw ConversionError(SJsonGetNodeTypeName(GetType()), SJsonGetNodeTypeName(SJsonNodeType::JSON_STRING));
-	//	}
+	//
+	// De-serialization
+	// 反序列化
+	// 
 
-	//	// Array 操作
-	//	virtual void ForEachElements(std::function<void(const SJsonNode*)> func) const
-	//	{
-	//		throw ConversionError(SJsonGetNodeTypeName(GetType()), SJsonGetNodeTypeName(SJsonNodeType::JSON_ARRAY));
-	//	}
-	//	virtual std::size_t arraySize() const
-	//	{
-	//		throw ConversionError(SJsonGetNodeTypeName(GetType()), SJsonGetNodeTypeName(SJsonNodeType::JSON_ARRAY));
-	//	}
-	//	virtual const SJsonNode* ElementAt(int index) const
-	//	{
-	//		throw ConversionError(SJsonGetNodeTypeName(GetType()), SJsonGetNodeTypeName(SJsonNodeType::JSON_ARRAY));
-	//	}
+	template <typename T>
+	using is_vector = std::is_same<T, std::vector<typename T::value_type,
+		typename T::allocator_type>>;
 
-	//	// Object 操作
-	//	virtual const SJsonNode* GetMember(const std::string& name) const
-	//	{
-	//		throw ConversionError(SJsonGetNodeTypeName(GetType()), SJsonGetNodeTypeName(SJsonNodeType::JSON_OBJECT));
-	//	}
+	/**
+	 * @brief If is primitive types, we can directly get value from JSON
+	 * @tparam T
+	 * @param v
+	 * @return
+	*/
+	template<typename T>
+	constexpr T de_serialize(const JsonNode& node)
+	{
+		if constexpr (std::is_fundamental<T>::value)
+		{
+			return node.Get<T>();
+		}
+		//else if constexpr (std::is_same<T, std::vector<typename T::value_type,
+		//	typename T::allocator_type>>)
+		//{
+		//	T vec;
+		//	node.foreach([&](const JsonNode& e) {
+		//		vec.push_back(de_serialize<T::value_type>(e));
+		//		});
+		//	return vec;
+		//}
+		else if constexpr (std::is_object<decltype(T::properties())>::value)
+		{
+			T result;
+			// We first get the number of properties
+			constexpr auto nbProperties = std::tuple_size<decltype(T::properties())>::value;
 
-	//	virtual bool HasMember(const std::string& name) const
-	//	{
-	//		throw ConversionError(SJsonGetNodeTypeName(GetType()), SJsonGetNodeTypeName(SJsonNodeType::JSON_OBJECT));
-	//	}
+			// We iterate on the index sequence of size `nbProperties`
+			for_sequence(std::make_index_sequence<nbProperties>{}, [&](auto i) {
+				// get the property
+				constexpr auto prop = std::get<i>(T::properties());
 
+				// set the value to the member
+				result.*(prop.member) = node[prop.name].Get<decltype(prop)::Type>();
+				});
+			return result;
+		}
+		else
+		{
+			static_assert(false, "Cannot deserialize this type");
+		}
+	}
 
-	//	virtual void ForEachProperties(std::function<void(const std::string&, const SJsonNode*)> func) const
-	//	{
-	//		throw ConversionError(SJsonGetNodeTypeName(GetType()), SJsonGetNodeTypeName(SJsonNodeType::JSON_OBJECT));
-	//	}
-	//};
-
-
-	//class SJsonObjectNode : public SJsonNode
-	//{
-	//public:
-	//	SJsonObjectNode(const std::map<std::string, std::shared_ptr<SJsonNode>>& items) : _value(items) {}
-	//	~SJsonObjectNode() override {}
-
-	//	SJsonNodeType GetType() const override { return SJsonNodeType::JSON_OBJECT; };
-	//	const SJsonNode* GetMember(const std::string& name) const override
-	//	{
-	//		auto v = _value.find(name);
-	//		if (v == _value.end()) throw MissingMemberError(name);
-	//		return ptr(v->second);
-	//	}
-	//	bool HasMember(const std::string& name) const override
-	//	{
-	//		return _value.find(name) != _value.end();
-	//	}
-
-	//	void ForEachProperties(std::function<void(const std::string&, const SJsonNode*)> func) const override
-	//	{
-	//		for (auto& node : _value)
-	//		{
-	//			func(node.first, cptr(node.second));
-	//		}
-	//	}
-	//private:
-	//	std::map<std::string, std::shared_ptr<SJsonNode>> _value;
-	//};
-
-
-	//class SJsonArrayNode : public SJsonNode
-	//{
-	//public:
-	//	SJsonArrayNode(const std::vector<std::shared_ptr<SJsonNode>>& items) : _values(items) {}
-	//	~SJsonArrayNode() override {}
-
-	//	SJsonNodeType GetType() const override { return SJsonNodeType::JSON_ARRAY; };
-
-	//	std::size_t arraySize() const override { return _values.size(); }
-	//	void ForEachElements(std::function<void(const SJsonNode*)> func) const override
-	//	{
-	//		for (auto& v : _values)
-	//		{
-	//			func(cptr(v));
-	//		}
-	//	}
-	//	const SJsonNode* ElementAt(int index) const override
-	//	{
-	//		return cptr(_values[index]);
-	//	}
-	//private:
-	//	std::vector<std::shared_ptr<SJsonNode>> _values;
-	//};
-
-	//class SJsonNullNode : public SJsonNode
-	//{
-	//public:
-	//	SJsonNullNode() = default;
-	//	~SJsonNullNode() override {}
-
-	//	SJsonNodeType GetType() const override { return SJsonNodeType::JSON_NULL; };
-	//	bool IsNull() const override { return true; }
-	//};
-
-	//class SJsonBoolNode : public SJsonNode
-	//{
-	//public:
-	//	SJsonBoolNode(bool value) : SJsonNode(), _value(value) {}
-	//	~SJsonBoolNode() override {}
-
-	//	SJsonNodeType GetType() const override { return SJsonNodeType::JSON_BOOL; };
-	//	bool GetBool() const override { return _value; }
-
-	//private:
-	//	bool _value;
-	//};
-
-
-	//class SJsonIntNode : public SJsonNode
-	//{
-	//public:
-	//	SJsonIntNode(ll value) : SJsonNode(), _value(value) {}
-	//	~SJsonIntNode() override {}
-
-	//	SJsonNodeType GetType() const override { return SJsonNodeType::JSON_INT; };
-	//	ll GetInt() const override { return _value; }
-	//	double GetFloat() const override { return (double)_value; }
-
-	//private:
-	//	ll _value;
-	//};
-
-	//class SJsonFloatNode : public SJsonNode
-	//{
-	//public:
-	//	SJsonFloatNode(double value) : SJsonNode(), _value(value) {}
-	//	~SJsonFloatNode() override {}
-
-	//	SJsonNodeType GetType() const override { return SJsonNodeType::JSON_FLOAT; };
-	//	double GetFloat() const override { return _value; }
-	//	ll GetInt() const override { return (ll)_value; }
-
-	//private:
-	//	double _value;
-	//};
-
-	//class SJsonStringNode : public SJsonNode
-	//{
-	//public:
-	//	SJsonStringNode(const std::string& value) : SJsonNode(), _value(value) {}
-	//	~SJsonStringNode() override {}
-
-	//	SJsonNodeType GetType() const override { return SJsonNodeType::JSON_STRING; };
-	//	std::string GetString() const override { return _value; }
-
-	//private:
-	//	std::string _value;
-	//};
-
-
-
-
-	//// 模板便捷操作
-	//template<typename T>
-	//T TryGetMemberValue(const std::shared_ptr<SJsonNode>& node, const std::string& name, T defValue);
-
-	//template<typename T>
-	//inline T TryGetMemberValue(const std::shared_ptr<SJsonNode>& node, const std::string& name, T defValue)
-	//{
-	//	throw OperationError("Unknown JSON Value Type");
-	//}
-	//template<>
-	//inline int TryGetMemberValue(const std::shared_ptr<SJsonNode>& node, const std::string& name, int defValue)
-	//{
-	//	if (node->HasMember(name))
-	//	{
-	//		return node->GetMember(name)->GetInt();
-	//	}
-	//	return defValue;
-	//}
-	//template<>
-	//inline ll TryGetMemberValue(const std::shared_ptr<SJsonNode>& node, const std::string& name, ll defValue)
-	//{
-	//	if (node->HasMember(name))
-	//	{
-	//		return node->GetMember(name)->GetInt();
-	//	}
-	//	return defValue;
-	//}
-
-	//template<>
-	//inline bool TryGetMemberValue(const std::shared_ptr<SJsonNode>& node, const std::string& name, bool defValue)
-	//{
-	//	if (node->HasMember(name))
-	//	{
-	//		return node->GetMember(name)->GetBool();
-	//	}
-	//	return defValue;
-	//}
-
-	//template<>
-	//inline float TryGetMemberValue(const std::shared_ptr<SJsonNode>& node, const std::string& name, float defValue)
-	//{
-	//	if (node->HasMember(name))
-	//	{
-	//		return node->GetMember(name)->GetFloat();
-	//	}
-	//	return defValue;
-	//}
-
-	//template<>
-	//inline double TryGetMemberValue(const std::shared_ptr<SJsonNode>& node, const std::string& name, double defValue)
-	//{
-	//	if (node->HasMember(name))
-	//	{
-	//		return node->GetMember(name)->GetFloat();
-	//	}
-	//	return defValue;
-	//}
-
-	//template<>
-	//inline std::string TryGetMemberValue(const std::shared_ptr<SJsonNode>& node, const std::string& name, std::string defValue)
-	//{
-	//	if (node->HasMember(name))
-	//	{
-	//		return node->GetMember(name)->GetString();
-	//	}
-	//	return defValue;
-	//}
+	template<>
+	std::string de_serialize(const JsonNode& node)
+	{
+		return node.Get<std::string>();
+	}
 }
