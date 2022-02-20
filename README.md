@@ -12,11 +12,11 @@ You can find the test cases and testing program at `Ver2/test.cpp`
 You can create a JSON object from the following code:
 ```c++
 auto node = SJson::object({
-		{"Name", "CXUtk"},
-		{"Age", 21},
-		{"Company", "Microsoft"},
-		{"Object", {1, 2, 3}},
-		{"Test", {1, "3", false}},
+    {"Name", "CXUtk"},
+    {"Age", 21},
+    {"Company", "Microsoft"},
+    {"Object", {1, 2, 3}},
+    {"Test", {1, "3", false}},
 });
 /*
 Output: {
@@ -82,24 +82,24 @@ Serialization and deserialization reqiures manually set the meta information.
 class TestObject
 {
 public:
-	int										Age;
-	float									Weight;
-	bool									Male;
-	std::string								Name;
-	std::vector<int>						List;
-	std::map<int, std::vector<std::string>> Mapp;
+    int                                     Age;
+    float                                   Weight;
+    bool                                    Male;
+    std::string                             Name;
+    std::vector<int>                        List;
+    std::map<int, std::vector<std::string>> Mapp;
 
     // Set fields, capture by field name
     PROPERTIES(TestObject, 
-		PROPERTY(Age), 
-		PROPERTY(Weight), 
-		PROPERTY(Male),
-		PROPERTY(Name),
-		PROPERTY(List),
-		PROPERTY(Mapp),
-		PROPERTY(InternalData),
-		PROPERTY(EnumValue)
-		);
+        PROPERTY(Age), 
+        PROPERTY(Weight), 
+        PROPERTY(Male),
+        PROPERTY(Name),
+        PROPERTY(List),
+        PROPERTY(Mapp),
+        PROPERTY(InternalData),
+        PROPERTY(EnumValue)
+        );
 };
 ```
 
