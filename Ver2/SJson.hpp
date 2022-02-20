@@ -11,6 +11,8 @@
 #include <initializer_list>
 #include <cassert>
 #include <type_traits>
+#include <sstream>
+#include <iomanip>
 
 
 namespace std
@@ -125,7 +127,12 @@ namespace SJson
 	{
 	public:
 		static JsonNode Parse(const std::string& text);
-		static std::string Serialize(const JsonNode& node);
+
+		template<typename T>
+		static std::string Serialize(const T& v, const JsonFormatOption& option);
+
+		template<typename T>
+		static T Deserialize(const std::string jsonStr);
 	};
 
 	struct JsonFormatOption
@@ -136,6 +143,7 @@ namespace SJson
 	};
 
 	const JsonFormatOption DefaultOption = { true, false, false };
+	const JsonFormatOption InlineWithQuoteOption = { true, false, true };
 	const JsonFormatOption DocumentOption = { false, false, true };
 
 	// using JsonValue = void*;
@@ -175,6 +183,7 @@ namespace SJson
 		std::string ToString(const JsonFormatOption& format) const;
 
 		void foreach(std::function<void(const JsonNode&)> action) const;
+		void foreach_pairs(std::function<void(const std::string&, const JsonNode&)> action) const;
 
 		void push_back(JsonNode&& node);
 		void push_back(const JsonNode& node);
@@ -191,11 +200,11 @@ namespace SJson
 	};
 
 
-	JsonNode::~JsonNode()
+	inline JsonNode::~JsonNode()
 	{
 	}
 
-	JsonNode::JsonNode()
+	inline JsonNode::JsonNode()
 		: m_type(ValueType::Null), m_value(std::monostate())
 	{
 	}
@@ -225,7 +234,7 @@ namespace SJson
 	{
 	}
 
-	JsonNode::JsonNode(const std::string& value)
+	inline JsonNode::JsonNode(const std::string& value)
 		: m_type(ValueType::String), m_value(value)
 	{
 	}
@@ -277,43 +286,8 @@ namespace SJson
 		return std::get<std::string>(m_value);
 	}
 
-	//template<typename T, t_enable_if_same_type<T, bool>>
-	//inline T JsonNode::Get() const
-	//{
-	//	assert(m_type == ValueType::Boolean);
-	//	return std::get<bool>(m_value);
-	//}
 
-	//template<typename T, t_enable_if_floating_type<T>>
-	//inline T JsonNode::Get() const
-	//{
-	//	assert(m_type == ValueType::Float);
-	//	return static_cast<T>(std::get<double>(m_value));
-	//}
-
-	//template<typename T, t_enable_if_same_type<T, std::string>>
-	//inline T JsonNode::Get() const
-	//{
-	//	assert(m_type == ValueType::String);
-	//	return std::get<std::string>(m_value);
-	//}
-	//template<>
-	//inline int JsonNode::Get() const
-	//{
-	//	assert(m_type == ValueType::Integer);
-	//	return std::get<int64_t>(m_value);
-	//}
-
-	//template<>
-	//inline int64_t JsonNode::Get() const
-	//{
-	//	assert(m_type == ValueType::Integer);
-	//	return std::get<int64_t>(m_value);
-	//}
-
-
-
-	std::string JsonNode::ToString(const JsonFormatOption& format) const
+	inline std::string JsonNode::ToString(const JsonFormatOption& format) const
 	{
 		return internal_tostring(format, 0);
 	}
@@ -324,6 +298,15 @@ namespace SJson
 		for (auto& element : std::get<array_type>(m_value))
 		{
 			action(element);
+		}
+	}
+
+	inline void JsonNode::foreach_pairs(std::function<void(const std::string&, const JsonNode&)> action) const
+	{
+		assert(m_type == ValueType::Object);
+		for (auto& pair : std::get<object_type>(m_value))
+		{
+			action(pair.first, pair.second);
 		}
 	}
 
@@ -485,8 +468,13 @@ namespace SJson
 		break;
 		case SJson::ValueType::Float:
 		{
+			// High precision double
 			auto floatValue = std::get<double>(m_value);
-			return std::to_string(floatValue);
+			std::stringstream ss;
+			ss << std::fixed;
+			ss << std::setprecision(std::numeric_limits<double>::digits10 + 2);
+			ss << floatValue;
+			return ss.str();
 		}
 		break;
 		default:
@@ -823,7 +811,7 @@ namespace SJson
 		return tokenList;
 	}
 
-	int expect(const JsonToken& token, TokenType type, int index)
+	inline int expect(const JsonToken& token, TokenType type, int index)
 	{
 		if (token.Token != type)
 		{
@@ -836,7 +824,7 @@ namespace SJson
 	using m_pair = std::pair<const std::string, JsonNode>;
 	using arrlist = std::vector<JsonNode>;
 
-	maplist parse_object(const std::vector<JsonToken>& tokens,
+	inline maplist parse_object(const std::vector<JsonToken>& tokens,
 		int index, int& newIndex)
 	{
 
@@ -879,7 +867,7 @@ namespace SJson
 		}
 	}
 
-	arrlist parse_array(const std::vector<JsonToken>& tokens,
+	inline arrlist parse_array(const std::vector<JsonToken>& tokens,
 		int index, int& newIndex)
 	{
 		arrlist list;
@@ -954,7 +942,7 @@ namespace SJson
 		return result;
 	}
 
-	JsonNode parse(const std::vector<JsonToken>& tokens, int index, int& newIndex)
+	inline JsonNode parse(const std::vector<JsonToken>& tokens, int index, int& newIndex)
 	{
 		auto& token = tokens[index];
 		switch (token.Token)
@@ -967,14 +955,12 @@ namespace SJson
 		case TokenType::Integer:
 		{
 			newIndex = index + 1;
-			size_t num;
-			return JsonNode(std::stoll(token.Value, &num, 10));
+			return JsonNode(std::stoll(token.Value, nullptr, 10));
 		}
 		case TokenType::Float:
 		{
 			newIndex = index + 1;
-			size_t num;
-			return JsonNode(std::stod(token.Value, &num));
+			return JsonNode(std::stod(token.Value, nullptr));
 		}
 		case TokenType::True:
 		{
@@ -994,7 +980,8 @@ namespace SJson
 		case TokenType::LeftBrace:
 		{
 			JsonNode node = JsonNode(object_type_init());
-			for (auto& pair : parse_object(tokens, index + 1, newIndex))
+			auto& obj = parse_object(tokens, index + 1, newIndex);
+			for (auto& pair : obj)
 			{
 				node[pair.first] = pair.second;
 			}
@@ -1003,7 +990,8 @@ namespace SJson
 		case TokenType::LeftBracket:
 		{
 			JsonNode node = JsonNode(array_type_init());
-			for (auto& element : parse_array(tokens, index + 1, newIndex))
+			auto& arr = parse_array(tokens, index + 1, newIndex);
+			for (auto& element : arr)
 			{
 				node.push_back(element);
 			}
@@ -1019,7 +1007,7 @@ namespace SJson
 		throw parse_error("Failed to parse", token);
 	}
 
-	JsonNode JsonConvert::Parse(const std::string& text)
+	inline JsonNode JsonConvert::Parse(const std::string& text)
 	{
 		auto tokens = lex(text);
 		int index = 0;
@@ -1029,11 +1017,6 @@ namespace SJson
 			throw parse_error("Root not singluar", tokens[index]);
 		}
 		return node;
-	}
-
-	std::string JsonConvert::Serialize(const JsonNode& node)
-	{
-		return std::string();
 	}
 
 	inline std::string GetValueTypeName(ValueType type)
@@ -1194,7 +1177,7 @@ struct SJson::enum_mapper<SType>\
 	constexpr JsonNode serialize(const T& v)
 	{
 		// If is a vector of elements, we can convert them to a JSON array
-		return SJson::JsonNode(enum_mapper<T>::map(v));
+		return SJson::JsonNode(enum_mapper<T>::enum_to_string(v));
 	}
 
 	template<typename, typename = void>
@@ -1266,7 +1249,7 @@ struct SJson::enum_mapper<SType>\
 			SJson::JsonNode node = SJson::array({});
 			for (auto& pair : v)
 			{
-				node.push_back(serialize<K, V>(pair));
+				node.push_back(serialize(pair));
 			}
 			return node;
 		}
@@ -1300,21 +1283,10 @@ struct SJson::enum_mapper<SType>\
 		return json;
 	}
 
-	//template<typename Class>
-	//constexpr std::enable_if_t<std::is_object<decltype(Class::properties())>::value, SJson::JsonNode>
-	//	serialize(const Class& v)
-	//{
-	//	
-	//}
-
 	//
 	// De-serialization
 	// 反序列化
 	// 
-
-	//template <typename T>
-	//using is_vector = std::is_same<T, std::vector<typename T::value_type,
-	//	typename T::allocator_type>>;
 
 	/**
 	 * @brief If is primitive types, we can directly get value from JSON
@@ -1333,9 +1305,23 @@ struct SJson::enum_mapper<SType>\
 		{
 			T vec;
 			node.foreach([&](const JsonNode& e) {
-				vec.push_back(de_serialize<T::value_type>(e));
-				});
+				vec.push_back(de_serialize<typename T::value_type>(e));
+			});
 			return vec;
+		}
+		else if constexpr (is_map<T>::value)
+		{
+			T mapp;
+			node.foreach([&](const JsonNode& e) {
+				auto key = de_serialize<typename T::key_type>(e["key"]);
+				auto value = de_serialize<typename T::mapped_type>(e["value"]);
+				mapp[key] = value;
+			});
+			return mapp;
+		}
+		else if constexpr (std::is_enum<T>::value)
+		{
+			return enum_mapper<T>::string_to_enum(node.Get<std::string>());
 		}
 		else if constexpr (std::is_object<decltype(T::properties())>::value)
 		{
@@ -1351,6 +1337,20 @@ struct SJson::enum_mapper<SType>\
 				// set the value to the member
 				result.*(prop.member) = de_serialize<decltype(prop)::Type>(node[prop.name]);
 				});
+
+			if constexpr (is_parent_defined<T>)
+			{
+				constexpr auto nParents = std::tuple_size<decltype(T::parents())>::value;
+				for_sequence(std::make_index_sequence<nParents>{}, [&](auto i) {
+					constexpr auto classRef = std::get<i>(T::parents());
+
+					using baseType = typename decltype(classRef)::Type;
+					baseType& base = result;
+					std::string key = "$";
+					key.append(classRef.name);
+					base = de_serialize<baseType>(node[key]);
+					});
+			}
 			return result;
 		}
 		else
@@ -1360,8 +1360,20 @@ struct SJson::enum_mapper<SType>\
 	}
 
 	template<>
-	std::string de_serialize(const JsonNode& node)
+	inline std::string de_serialize(const JsonNode& node)
 	{
 		return node.Get<std::string>();
+	}
+
+	template<typename T>
+	inline std::string JsonConvert::Serialize(const T& v, const JsonFormatOption& option)
+	{
+		return serialize(v).ToString(option);
+	}
+
+	template<typename T>
+	inline T JsonConvert::Deserialize(const std::string jsonStr)
+	{
+		return de_serialize<T>(Parse(jsonStr));
 	}
 }

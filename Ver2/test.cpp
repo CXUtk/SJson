@@ -8,6 +8,30 @@ static int test_count = 0;
 static int test_pass = 0;
 
 template<typename T>
+void expect_equal_vector(const std::vector<T>& expected, const std::vector<T>& actual, const char* file, int line)
+{
+	test_count++;
+	try
+	{
+		if (expected == actual)
+		{
+			test_pass++;
+			return;
+		}
+		else
+		{
+			fprintf(stderr, "%s:%d: Value mismatch, expected \"%s\", actual \"%s\"\n",
+				file, line, SJson::JsonConvert::Serialize(expected, SJson::DefaultOption).c_str(), 
+				SJson::JsonConvert::Serialize(actual, SJson::DefaultOption).c_str());
+		}
+	}
+	catch (std::exception& e)
+	{
+		fprintf(stderr, "%s:%d: unexpected error thrown: %s\n", file, line, e.what());
+	}
+}
+
+template<typename T>
 void expect_parse_throw_error(const std::string& text, const char* file, int line, const char* name)
 {
 	test_count++;
@@ -180,7 +204,6 @@ void expect_equal(const SJson::JsonNode& node, T value, const char* file, int li
 	static_assert(false, "This data type is unsupported");
 }
 
-
 template<>
 void expect_equal(const SJson::JsonNode& node, bool expected, const char* file, int line)
 {
@@ -236,14 +259,14 @@ void expect_equal(const SJson::JsonNode& node, double expected, const char* file
 	try
 	{
 		auto value = node.Get<double>();
-		if (value == expected)
+		if (std::abs(value - expected) < 1e-6)
 		{
 			test_pass++;
 			return;
 		}
 		else
 		{
-			fprintf(stderr, "%s:%d: Value mismatch, expected %lf, actual %lf\n", file, line, expected, value);
+			fprintf(stderr, "%s:%d: Value mismatch, expected %.9lf, actual %.9lf\n", file, line, expected, value);
 		}
 	}
 	catch (std::exception& e)
@@ -287,6 +310,7 @@ void expect_equal(const SJson::JsonNode& node, std::string expected, const char*
 #define EXPECT_EQ_FLOAT(node, value) expect_equal<double>(node, value, __FILE__, __LINE__)
 #define EXPECT_EQ_BOOL(node, value) expect_equal<bool>(node, value, __FILE__, __LINE__)
 #define EXPECT_EQ_STRING(node, value) expect_equal<std::string>(node, value, __FILE__, __LINE__)
+#define EXPECT_EQ_VECTOR(actual, expected) expect_equal_vector((expected), actual, __FILE__, __LINE__)
 #define EXPECT_NODE_TYPE(node, type) \
     test_count++; \
     if (node.GetType() == type) { \
@@ -590,11 +614,264 @@ static void test_parse_json()
 	EXPECT_PARSE_NOTHROW(JSON);
 }
 
-static void test_serialization()
+static void test_to_string()
 {
+	SJson::JsonNode node = SJson::object({
+		{"Name", "DXTsT"},
+		{"Age", 21},
+		{"Company", "Microsoft"},
+		{"Object", {1, 2, 3}},
+		{"Test", SJson::array({1, 2, "123", false})},
+		});
+	EXPECT_EQ_STRING(node.ToString(SJson::DefaultOption), 
+		R"({Age: 21, Company: "Microsoft", Name: "DXTsT", Object: [1, 2, 3], Test: [1, 2, "123", false]})");
+	EXPECT_EQ_STRING(node.ToString(SJson::InlineWithQuoteOption), 
+		R"({"Age": 21, "Company": "Microsoft", "Name": "DXTsT", "Object": [1, 2, 3], "Test": [1, 2, "123", false]})");
 
+	node = 10;
+	EXPECT_EQ_STRING(node.ToString(SJson::DefaultOption), "10");
+
+	node = true;
+	EXPECT_EQ_STRING(node.ToString(SJson::DefaultOption), "true");
+
+	node = SJson::JsonNode();
+	EXPECT_EQ_STRING(node.ToString(SJson::DefaultOption), "null");
+
+	node = 3.14159265357;
+	EXPECT_EQ_STRING(node.ToString(SJson::DefaultOption), "3.1415926535700001");
+
+	node = "hello world";
+	EXPECT_EQ_STRING(node.ToString(SJson::DefaultOption), R"("hello world")");
+
+	node = {1, 3, 5, 7, 9};
+	EXPECT_EQ_STRING(node.ToString(SJson::DefaultOption), R"([1, 3, 5, 7, 9])");
+
+	node = SJson::object({ {"first", 1}, {"second", 2} });
+	EXPECT_EQ_STRING(node.ToString(SJson::DefaultOption), R"({first: 1, second: 2})");
 }
 
+
+enum class SType
+{
+	A,
+	B,
+	C
+};
+
+//#define FIELDS(F) F(A) F(B) F(C)
+//GENERATE_ENUM(SType, FIELDS)
+//#undef KEYS
+
+template<>
+struct SJson::enum_mapper<SType>
+{
+	using ENUM_TYPE = SType;
+	static const char* const enum_to_string(ENUM_TYPE v)
+	{
+		switch (v)
+		{
+		case ENUM_TYPE::A: return "A";
+		case ENUM_TYPE::B: return "B";
+		case ENUM_TYPE::C: return "C";
+		default:
+			break;
+		}
+		throw std::logic_error("Invalid enum type");
+	}
+
+	static ENUM_TYPE string_to_enum(const std::string& str)
+	{
+		static std::map<std::string, ENUM_TYPE> stringmap = {
+			{"A", ENUM_TYPE::A},
+			{"B", ENUM_TYPE::B},
+			{"C", ENUM_TYPE::C},
+		};
+		std::map<std::string, ENUM_TYPE>::iterator it;
+		if ((it = stringmap.find(str)) != stringmap.end())
+		{
+			return it->second;
+		}
+		throw std::logic_error("Invalid enum type");
+	}
+};
+
+class Internal
+{
+public:
+	int A;
+	float B;
+
+	PROPERTIES(Internal, PROPERTY(A), PROPERTY(B));
+
+	bool operator==(const Internal& other) const
+	{
+		return A == other.A && B == other.B;
+	}
+};
+
+class TestParent2
+{
+public:
+	int		ParentAge2;
+
+	PROPERTIES(TestParent2, PROPERTY(ParentAge2));
+
+	bool operator==(const TestParent2& other) const
+	{
+		return ParentAge2 == other.ParentAge2;
+	}
+};
+
+class TestParent
+{
+public:
+	int		ParentAge;
+
+	PROPERTIES(TestParent, PROPERTY(ParentAge));
+
+	bool operator==(const TestParent& other) const
+	{
+		return ParentAge == other.ParentAge;
+	}
+};
+
+class TestObject : public TestParent, public TestParent2
+{
+public:
+	int										Age;
+	float									Weight;
+	bool									Male;
+	std::string								Name;
+	std::vector<int>						List;
+	std::map<int, std::vector<std::string>> Mapp;
+	Internal								InternalData;
+	SType									EnumValue;
+
+	bool operator==(const TestObject& other) const
+	{
+		return TestParent::operator==(other) && TestParent2::operator==(other) && Age == other.Age 
+			&& Weight == other.Weight && Male == other.Male
+			&& Name == other.Name && List == other.List && Mapp == other.Mapp
+			&& InternalData == other.InternalData && EnumValue == other.EnumValue;
+	}
+
+	PROPERTIES(TestObject, 
+		PROPERTY(Age), 
+		PROPERTY(Weight), 
+		PROPERTY(Male),
+		PROPERTY(Name),
+		PROPERTY(List),
+		PROPERTY(Mapp),
+		PROPERTY(InternalData),
+		PROPERTY(EnumValue)
+		);
+	constexpr static auto parents()
+	{
+		return std::make_tuple(
+			BASECLASS(TestParent),
+			BASECLASS(TestParent2)
+		);
+	}
+};
+
+
+
+static void test_serialization()
+{
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(true, SJson::DefaultOption), "true");
+
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(false, SJson::DefaultOption), "false");
+
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(155541213, SJson::DefaultOption), "155541213");
+
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(3.14159265358, SJson::DefaultOption), "3.1415926535800001");
+
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize("hello world", SJson::DefaultOption), R"("hello world")");
+
+	std::vector<int> intArr = { 1, 4, 2, 8, 5, 7 };
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(intArr, SJson::DefaultOption), R"([1, 4, 2, 8, 5, 7])");
+
+	std::vector<std::string> strArr = { "a", "b", "c"};
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(strArr, SJson::DefaultOption), R"(["a", "b", "c"])");
+
+	std::tuple<int, float, std::string> tuple1 = { 114514, 3.14159, "test"};
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(tuple1, SJson::DefaultOption), R"([114514, 3.1415901184082031, "test"])");
+
+	std::map<int, double> map1 = { {1, 3.14}, {2, 6.28} };
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(map1, SJson::DefaultOption), R"([{key: 1, value: 3.1400000000000001}, {key: 2, value: 6.2800000000000002}])");
+
+	std::map<std::string, int> map2 = { {"A", 1}, {"B", 2} };
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(map2, SJson::DefaultOption), R"([{key: "A", value: 1}, {key: "B", value: 2}])");
+
+	SType enumVal = SType::A;
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(enumVal, SJson::DefaultOption),R"("A")");
+
+	TestObject test = {};
+	test.Age = 21;
+	test.List = { 1, 2, 3 };
+	test.Mapp = { {1, {"A", "B"}}, {2, {"C", "D"}} };
+	test.Weight = 199.45;
+	test.Male = true;
+	test.Name = "DXTsT";
+	test.ParentAge = 55;
+	test.ParentAge2 = 54;
+	test.EnumValue = SType::C;
+	EXPECT_EQ_STRING(SJson::JsonConvert::Serialize(test, SJson::DefaultOption),
+		R"({$TestParent: {ParentAge: 55}, $TestParent2: {ParentAge2: 54}, Age: 21, EnumValue: "C", InternalData: {A: 0, B: 0.00000000000000000}, List: [1, 2, 3], Male: true, Mapp: [{key: 1, value: ["A", "B"]}, {key: 2, value: ["C", "D"]}], Name: "DXTsT", Weight: 199.44999694824218750})");
+}
+
+
+static void test_deserialization()
+{
+	int i1 = SJson::JsonConvert::Deserialize<int>("114514");
+	EXPECT_EQ_INT(i1, 114514);
+
+	float f1 = SJson::JsonConvert::Deserialize<float>("114514.0");
+	EXPECT_EQ_FLOAT(f1, 114514.f);
+
+	float f2 = SJson::JsonConvert::Deserialize<double>("3.14");
+	EXPECT_EQ_FLOAT(f2, 3.14);
+
+	bool b1 = SJson::JsonConvert::Deserialize<bool>("true");
+	EXPECT_EQ_BOOL(b1, true);
+
+	bool b2 = SJson::JsonConvert::Deserialize<bool>("false");
+	EXPECT_EQ_BOOL(b2, false);
+
+	auto s1 = SJson::JsonConvert::Deserialize<std::string>(R"("hello")");
+	EXPECT_EQ_STRING(s1, "hello");
+
+	auto v1 = SJson::JsonConvert::Deserialize<std::vector<int>>(R"([1, 2, 3, 4])");
+	auto exv1 = std::vector<int>{ 1, 2, 3, 4 };
+	EXPECT_EQ_VECTOR(v1, exv1);
+
+	auto v2 = SJson::JsonConvert::Deserialize<std::vector<int>>(R"([])");
+	auto exv2 = std::vector<int>{};
+	EXPECT_EQ_VECTOR(v2, exv2);
+
+	auto m1 = SJson::JsonConvert::Deserialize<std::map<int, std::string>>(R"([{"key": 1, "value": "hello"}])");
+	EXPECT_EQ_STRING(m1[1], "hello");
+
+	auto m2 = SJson::JsonConvert::Deserialize<std::map<std::string, int>>(R"([{"key": "test", "value": 114514}])");
+	EXPECT_EQ_INT(m2["test"], 114514);
+
+	auto enum1 = SJson::JsonConvert::Deserialize<SType>(R"("C")");
+	EXPECT_EQ_INT((int)enum1, (int)SType::C);
+
+
+	TestObject test = {};
+	test.Age = 21;
+	test.List = { 1, 2, 3 };
+	test.Mapp = { {1, {"A", "B"}}, {2, {"C", "D"}} };
+	test.Weight = 199.45;
+	test.Male = true;
+	test.Name = "DXTsT";
+	test.ParentAge = 55;
+	test.ParentAge2 = 54;
+	test.EnumValue = SType::C;
+	auto object1 = SJson::JsonConvert::Deserialize<TestObject>(R"({"$TestParent": {"ParentAge": 55}, "$TestParent2": {"ParentAge2": 54}, "Age": 21, "EnumValue": "C", "InternalData": {"A": 0, "B": 0.0}, "List": [1, 2, 3], "Male": true, "Mapp": [{"key": 1, "value": ["A", "B"]}, {"key": 2, "value": ["C", "D"]}], "Name": "DXTsT", "Weight": 199.44999694824219})");
+	assert(test == object1);
+}
 
 static void test_parse()
 {
@@ -610,82 +887,10 @@ static void test_parse()
 	test_parse_array();
 	test_parse_object();
 	test_parse_json();
+	test_to_string();
 	test_serialization();
+	test_deserialization();
 }
-
-class Internal
-{
-public:
-	int A;
-	float B;
-
-	PROPERTIES(Internal, PROPERTY(A), PROPERTY(B));
-};
-
-
-enum class SType
-{
-	A,
-	B,
-	C
-};
-
-#define FIELDS(F) F(A) F(B) F(C)
-GENERATE_ENUM(SType, FIELDS)
-#undef KEYS
-
-//template<>
-//struct SJson::enum_mapper<SType>
-//{
-//	static const char* const map(SType v)
-//	{
-//		switch (v)
-//		{
-//		case SType::A:
-//			return "A";
-//		case SType::B:
-//			return "B";
-//		case SType::C:
-//			return "C";
-//		default:
-//			break;
-//		}
-//		throw std::logic_error("Invalid enum type");
-//	}
-//};
-
-
-class TestParent2
-{
-public:
-	int		ParentAge2;
-
-	PROPERTIES(TestParent2, PROPERTY(ParentAge2));
-};
-
-class TestParent
-{
-public:
-	int		ParentAge;
-
-	PROPERTIES(TestParent, PROPERTY(ParentAge));
-};
-class TestObject : public TestParent, public TestParent2
-{
-public:
-	int			Age;
-	float		Weight;
-
-	PROPERTIES(TestObject, PROPERTY(Age), PROPERTY(Weight));
-	constexpr static auto parents()
-	{
-		return std::make_tuple(
-			BASECLASS(TestParent),
-			BASECLASS(TestParent2)
-		);
-	}
-};
-
 
 int main()
 {
