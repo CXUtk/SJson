@@ -895,15 +895,17 @@ static void test_parse()
 int main()
 {
 
+	SJson::JsonNode json;
+	json["name"]["s"] = "CXUtk";
 
 	SJson::JsonNode node = SJson::object({
-		{"Name", "DXTsT"},
+		{"Name", "CXUtk"},
 		{"Age", 21},
 		{"Company", "Microsoft"},
 		{"Object", {1, 2, 3}},
 		{"Test", SJson::array({1, 2, "123", false})},
 		});
-	printf("%s\n", SJson::GetValueTypeName(node.GetType()).c_str());
+	printf("%s\n", node.ToString(SJson::DocumentOption).c_str());
 
 	//SJson::JsonFormatOption option = {};
 	//option.Inline = false;
