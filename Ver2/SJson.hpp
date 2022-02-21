@@ -1070,6 +1070,26 @@ namespace SJson
 	template<typename K, typename V, typename Cmp, typename Alloc>
 	struct is_map<std::map<K, V, Cmp, Alloc>> : public std::true_type {};
 
+	template<typename, typename = void>
+	struct is_type_complete : public std::false_type {};
+
+	template<typename T>
+	struct is_type_complete
+		<T, std::void_t<decltype(sizeof(T))>> : public std::true_type
+	{
+	};
+
+	template<typename T, typename = void>
+	struct is_parent_defined : public std::false_type {};
+
+	template<typename T>
+	struct is_parent_defined<T, std::void_t<decltype(T::parents)>> : std::true_type {};
+
+	template<typename T, typename = void>
+	struct has_properties : public std::false_type {};
+
+	template<typename T>
+	struct has_properties<T, std::void_t<decltype(T::properties())>> : std::true_type {};
 
 #define PROPERTY(member) SJson::property(&Self_Type::member, #member)
 #define BASECLASS(type) SJson::classref<type>(#type)
@@ -1135,19 +1155,6 @@ struct SJson::enum_mapper<SType>\
 		(static_cast<void>(f(std::integral_constant<T, S>{})), ...);
 	}
 
-	template <typename T>
-	class has_properties
-	{
-		typedef char one;
-		struct two { char x[2]; };
-
-		template <typename C> static one test(decltype(&C::properties));
-		template <typename C> static two test(...);
-
-	public:
-		enum { value = sizeof(test<T>(0)) == sizeof(char) };
-	};
-
 	template <typename E>
 	struct enum_mapper
 	{
@@ -1180,19 +1187,6 @@ struct SJson::enum_mapper<SType>\
 		return SJson::JsonNode(enum_mapper<T>::enum_to_string(v));
 	}
 
-	template<typename, typename = void>
-	struct is_type_complete : public std::false_type {};
-
-	template<typename T>
-	struct is_type_complete
-		<T, std::void_t<decltype(sizeof(T))>> : public std::true_type {};
-
-	template<typename T, typename = void>
-	constexpr bool is_parent_defined = false;
-
-	template<typename T>
-	constexpr bool is_parent_defined<T, decltype(T::parents, void())> = true;
-
 	template<typename T, std::enable_if_t<has_properties<T>::value, nullptr_t> = nullptr>
 	constexpr JsonNode serialize(const T& v)
 	{
@@ -1209,7 +1203,7 @@ struct SJson::enum_mapper<SType>\
 			json[property.name] = serialize(v.*(property.member));
 			});
 
-		if constexpr (is_parent_defined<T>)
+		if constexpr (is_parent_defined<T>::value)
 		{
 			constexpr auto nParents = std::tuple_size<decltype(T::parents())>::value;
 			for_sequence(std::make_index_sequence<nParents>{}, [&json, &v](auto i) {
@@ -1338,7 +1332,7 @@ struct SJson::enum_mapper<SType>\
 				result.*(prop.member) = de_serialize<decltype(prop)::Type>(node[prop.name]);
 				});
 
-			if constexpr (is_parent_defined<T>)
+			if constexpr (is_parent_defined<T>::value)
 			{
 				constexpr auto nParents = std::tuple_size<decltype(T::parents())>::value;
 				for_sequence(std::make_index_sequence<nParents>{}, [&](auto i) {
