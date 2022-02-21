@@ -157,7 +157,7 @@ void expect_parse_value(const std::string& text, const char* file, int line, dou
 	{
 		auto node = SJson::JsonConvert::Parse(text);
 		auto value = node.Get<double>();
-		if (value == expected)
+		if (std::abs(value - expected) < 1e-6)
 		{
 			test_pass++;
 			return;
@@ -346,38 +346,39 @@ static void test_parse_null()
 {
 	EXPECT_PARSE_NOTHROW("null");
 	EXPECT_PARSE_TYPE("null", SJson::ValueType::Null);
-	EXPECT_PARSE_THROW("nul", SJson::parse_error);
+	EXPECT_PARSE_THROW("nul", SJson::lexical_error);
 }
 
 static void test_parse_expect_value()
 {
-	EXPECT_PARSE_THROW("", SJson::parse_error);
-	EXPECT_PARSE_THROW(" ", SJson::parse_error);
-	EXPECT_PARSE_THROW("\t", SJson::parse_error);
-	EXPECT_PARSE_THROW("\n", SJson::parse_error);
-	EXPECT_PARSE_THROW("{", SJson::parse_error);
-	EXPECT_PARSE_THROW("[", SJson::parse_error);
+	EXPECT_PARSE_THROW("", SJson::invalid_eof);
+	EXPECT_PARSE_THROW(" ", SJson::invalid_eof);
+	EXPECT_PARSE_THROW("\t", SJson::invalid_eof);
+	EXPECT_PARSE_THROW("\n", SJson::invalid_eof);
+	EXPECT_PARSE_THROW("{", SJson::invalid_eof);
+	EXPECT_PARSE_THROW("[", SJson::invalid_eof);
 }
 
 static void test_parse_invalid_value()
 {
-	EXPECT_PARSE_THROW(",", SJson::parse_error);
-	EXPECT_PARSE_THROW("u", SJson::parse_error);
-	EXPECT_PARSE_THROW("}", SJson::parse_error);
-	EXPECT_PARSE_THROW("\b", SJson::parse_error);
-	EXPECT_PARSE_THROW("*", SJson::parse_error);
-	EXPECT_PARSE_THROW("?", SJson::parse_error);
+	EXPECT_PARSE_THROW(",", SJson::parse_match_failed);
+	EXPECT_PARSE_THROW("u", SJson::lexical_error);
+	EXPECT_PARSE_THROW("}", SJson::parse_match_failed);
+	EXPECT_PARSE_THROW("\b", SJson::lexical_error);
+	EXPECT_PARSE_THROW("*", SJson::lexical_error);
+	EXPECT_PARSE_THROW("?", SJson::lexical_error);
 }
 
 static void test_parse_root_not_singular()
 {
-	EXPECT_PARSE_THROW("null x", SJson::parse_error);
-	EXPECT_PARSE_THROW("null,null", SJson::parse_error);
-	EXPECT_PARSE_THROW("null,", SJson::parse_error);
-	EXPECT_PARSE_THROW("1,2,3,4,5", SJson::parse_error);
-	EXPECT_PARSE_THROW("{}[]", SJson::parse_error);
-	EXPECT_PARSE_THROW("{},", SJson::parse_error);
-	EXPECT_PARSE_THROW("[1, 2, 3[]]", SJson::parse_error);
+	EXPECT_PARSE_THROW("null true", SJson::root_not_singular_error);
+	EXPECT_PARSE_THROW("null,null", SJson::root_not_singular_error);
+	EXPECT_PARSE_THROW("null,", SJson::root_not_singular_error);
+	EXPECT_PARSE_THROW("1,2,3,4,5", SJson::root_not_singular_error);
+	EXPECT_PARSE_THROW("{}[]", SJson::root_not_singular_error);
+	EXPECT_PARSE_THROW("{},", SJson::root_not_singular_error);
+	EXPECT_PARSE_THROW("[1, 2, 3[]]", SJson::expect_token_error);
+	EXPECT_PARSE_THROW("[1, 2, 3", SJson::expect_token_error);
 
 	EXPECT_PARSE_NOTHROW(R"( {"A":[]} )");
 	EXPECT_PARSE_NOTHROW(R"( [[[]]] )");
@@ -429,8 +430,8 @@ static void test_parse_int()
 	EXPECT_PARSE_INT_VALUE("1145141919810132", 1145141919810132LL);
 	EXPECT_PARSE_INT_VALUE("1145141919810132", 1145141919810132LL);
 
-	EXPECT_PARSE_THROW("32242gg", SJson::parse_error);
-	EXPECT_PARSE_THROW(".", SJson::parse_error);
+	EXPECT_PARSE_THROW("32242gg", SJson::lexical_error);
+	EXPECT_PARSE_THROW(".", SJson::lexical_error);
 }
 
 static void test_parse_float()
@@ -450,10 +451,10 @@ static void test_parse_float()
 
 	EXPECT_PARSE_THROW("1e-10000", std::out_of_range);
 	EXPECT_PARSE_THROW("7e1232", std::out_of_range);
-	EXPECT_PARSE_THROW("7f123", SJson::parse_error);
-	EXPECT_PARSE_THROW("2.0e1e8", SJson::parse_error);
-	EXPECT_PARSE_THROW("..", SJson::parse_error);
-	EXPECT_PARSE_THROW("7.0f", SJson::parse_error);
+	EXPECT_PARSE_THROW("7f123", SJson::lexical_error);
+	EXPECT_PARSE_THROW("2.0e1e8", SJson::lexical_error);
+	EXPECT_PARSE_THROW("..", SJson::lexical_error);
+	EXPECT_PARSE_THROW("7.0f", SJson::lexical_error);
 }
 
 static void test_parse_string()
@@ -466,17 +467,22 @@ static void test_parse_string()
 	EXPECT_PARSE_STRING_VALUE(R"("Hello\n")", "Hello\n");
 	EXPECT_PARSE_STRING_VALUE(R"("\n")", "\n");
 
-	EXPECT_PARSE_THROW(R"(")", SJson::parse_error);
-	EXPECT_PARSE_THROW(R"("123142)", SJson::parse_error);
-	EXPECT_PARSE_THROW(R"('23142')", SJson::parse_error);
-	EXPECT_PARSE_THROW(R"("\q")", SJson::parse_error);
-	EXPECT_PARSE_THROW(R"("\ ")", SJson::parse_error);
+	EXPECT_PARSE_THROW(R"(")", SJson::lexical_error);
+	EXPECT_PARSE_THROW(R"("123142)", SJson::lexical_error);
+	EXPECT_PARSE_THROW(R"('23142')", SJson::lexical_error);
+	EXPECT_PARSE_THROW(R"("\q")", SJson::invalid_escape_char);
+	EXPECT_PARSE_THROW(R"("\ ")", SJson::invalid_escape_char);
 }
 
 
 static void test_parse_array()
 {
 	auto node = SJson::JsonConvert::Parse(" [1, 2, 3] ");
+	EXPECT_EQ_INT(node[0], 1LL);
+	EXPECT_EQ_INT(node[1], 2LL);
+	EXPECT_EQ_INT(node[2], 3LL);
+
+	node = SJson::JsonConvert::Parse(" [1, 2, 3] # array");
 	EXPECT_EQ_INT(node[0], 1LL);
 	EXPECT_EQ_INT(node[1], 2LL);
 	EXPECT_EQ_INT(node[2], 3LL);

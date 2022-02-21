@@ -122,6 +122,135 @@ namespace SJson
 	*/
 	JsonNode parse(const std::vector<JsonToken>& tokens, int index, int& newIndex);
 
+	/**
+	 * @brief 
+	 * @param type 
+	 * @return 
+	*/
+	std::string GetTokenFromType(TokenType type);
+
+	/**
+	 * @brief Get the formatted std::string
+	 * @tparam ...Args
+	 * @param format The same format as printf
+	 * @param ...args The same arguments as arguments of printf
+	 * @return Formatted string
+	*/
+	template<typename ... Args>
+	inline std::string string_format(const std::string& format, Args&& ... args)
+	{
+		int size_s = std::snprintf(nullptr, 0, format.c_str(), args ...) + 1; // Extra space for '\0'
+		if (size_s <= 0) { throw std::exception("Error during formatting."); }
+		auto size = static_cast<size_t>(size_s);
+		auto buf = std::make_unique<char[]>(size);
+		std::snprintf(buf.get(), size, format.c_str(), args ...);
+		return std::string(buf.get(), buf.get() + size - 1); // We don't want the '\0' inside
+	}
+
+
+	struct JsonToken
+	{
+		std::string						Value;
+		TokenType						Token;
+		int								Position;
+		std::shared_ptr<std::string>	OriginalText;
+	};
+
+
+	class sjson_error_base : public std::exception
+	{
+	public:
+		explicit sjson_error_base(const std::string& reason, const JsonToken& token)
+		{
+			int left = std::max(token.Position - 15, 0);
+			int right = std::min(token.Position + 15, (int)token.OriginalText->size() - 1);
+			std::string view = token.OriginalText->substr(left, right - left + 1);
+			std::string viewptr = "";
+			int offset = token.Position - left;
+			for (int i = 0; i < offset; i++)
+			{
+				viewptr.push_back(' ');
+			}
+			viewptr.push_back('^');
+			m_msg = string_format("Error: %s\nAt: %d\n%s\n%s", reason.c_str(), token.Position, view.c_str(), viewptr.c_str());
+		}
+		~sjson_error_base() override {}
+
+		const char* what() const override
+		{
+			return m_msg.c_str();
+		}
+	private:
+		std::string m_msg;
+	};
+
+	class lexical_error : public sjson_error_base
+	{
+	public:
+		lexical_error(const JsonToken& token)
+			: sjson_error_base("Invalid token", token) {}
+	};
+
+	class expect_token_error : public sjson_error_base
+	{
+	public:
+		expect_token_error(TokenType expect, TokenType actual, const JsonToken& token)
+			: sjson_error_base(string_format("Expected to have %s but got %s instead",
+				GetTokenFromType(expect).c_str(), GetTokenFromType(actual).c_str()), token)
+		{
+		}
+	};
+
+	class keys_not_string : public sjson_error_base
+	{
+	public:
+	public:
+		keys_not_string(const JsonToken& token)
+			: sjson_error_base("Keys is not string", token)
+		{
+		}
+	};
+
+	class invalid_escape_char : public sjson_error_base
+	{
+	public:
+	public:
+		invalid_escape_char(const JsonToken& token)
+			: sjson_error_base("Invalid escape character", token)
+		{
+		}
+	};
+
+	class invalid_eof : public sjson_error_base
+	{
+	public:
+	public:
+		invalid_eof(const JsonToken& token)
+			: sjson_error_base("Unexpected EOF character", token)
+		{
+		}
+	};
+
+	class parse_match_failed : public sjson_error_base
+	{
+	public:
+	public:
+		parse_match_failed(const JsonToken& token)
+			: sjson_error_base("Failed to match this token", token)
+		{
+		}
+	};
+
+	class root_not_singular_error : public sjson_error_base
+	{
+	public:
+	public:
+		root_not_singular_error(const JsonToken& token)
+			: sjson_error_base("Root not singular", token)
+		{
+		}
+	};
+
 
 	class JsonConvert
 	{
@@ -483,59 +612,6 @@ namespace SJson
 		return "";
 	}
 
-	struct JsonToken
-	{
-		std::string						Value;
-		TokenType						Token;
-		int								Position;
-		std::shared_ptr<std::string>	OriginalText;
-	};
-
-	/**
-	 * @brief Get the formatted std::string
-	 * @tparam ...Args
-	 * @param format The same format as printf
-	 * @param ...args The same arguments as arguments of printf
-	 * @return Formatted string
-	*/
-	template<typename ... Args>
-	inline std::string string_format(const std::string& format, Args&& ... args)
-	{
-		int size_s = std::snprintf(nullptr, 0, format.c_str(), args ...) + 1; // Extra space for '\0'
-		if (size_s <= 0) { throw std::exception("Error during formatting."); }
-		auto size = static_cast<size_t>(size_s);
-		auto buf = std::make_unique<char[]>(size);
-		std::snprintf(buf.get(), size, format.c_str(), args ...);
-		return std::string(buf.get(), buf.get() + size - 1); // We don't want the '\0' inside
-	}
-
-
-	class parse_error : public std::exception
-	{
-	public:
-		explicit parse_error(const std::string& reason, const JsonToken& token)
-		{
-			int left = std::max(token.Position - 10, 0);
-			int right = std::min(token.Position + 10, (int)token.OriginalText->size() - 1);
-			std::string view = token.OriginalText->substr(left, right - left + 1);
-			std::string viewptr = "";
-			int offset = token.Position - left;
-			for (int i = 0; i < offset; i++)
-			{
-				viewptr.push_back(' ');
-			}
-			viewptr.push_back('^');
-			m_msg = string_format("Error: %s\nAt: %d\n%s\n%s", reason.c_str(), token.Position, view.c_str(), viewptr.c_str());
-		}
-		~parse_error() override {}
-
-		const char* what() const override
-		{
-			return m_msg.c_str();
-		}
-	private:
-		std::string m_msg;
-	};
 
 	inline bool is_white_space(const char c)
 	{
@@ -804,7 +880,7 @@ namespace SJson
 			}
 			else
 			{
-				throw parse_error("Invalid Token", JsonToken{ "", TokenType::Unknown, i, originalText });
+				throw lexical_error(JsonToken{ "", TokenType::Unknown, i, originalText });
 			}
 		}
 		tokenList.push_back(JsonToken{ "", TokenType::EndOfFile, length, originalText });
@@ -815,7 +891,7 @@ namespace SJson
 	{
 		if (token.Token != type)
 		{
-			throw parse_error("Expected token #", token);
+			throw expect_token_error(type, token.Token, token);
 		}
 		return index + 1;
 	}
@@ -835,9 +911,13 @@ namespace SJson
 			while (true)
 			{
 				auto& keyToken = tokens[curIndex++];
+				if (keyToken.Token == TokenType::EndOfFile)
+				{
+					throw invalid_eof(keyToken);
+				}
 				if (keyToken.Token != TokenType::String)
 				{
-					throw parse_error("Expected keys to be string", keyToken);
+					throw keys_not_string(keyToken);
 				}
 				const std::string key = keyToken.Value;
 
@@ -913,7 +993,7 @@ namespace SJson
 			{
 				if (i == len - 1)
 				{
-					throw parse_error("Invalid escape character", token);
+					throw invalid_escape_char(token);
 				}
 				switch (str[i + 1])
 				{
@@ -934,7 +1014,7 @@ namespace SJson
 					i++;
 					break;
 				default:
-					throw parse_error("Invalid escape character", token);
+					throw invalid_escape_char(token);
 					break;
 				}
 			}
@@ -999,12 +1079,12 @@ namespace SJson
 		}
 		case TokenType::EndOfFile:
 		{
-			throw parse_error("Unexpected EOF!", token);
+			throw invalid_eof(token);
 		}
 		default:
 			break;
 		}
-		throw parse_error("Failed to parse", token);
+		throw parse_match_failed(token);
 	}
 
 	inline JsonNode JsonConvert::Parse(const std::string& text)
@@ -1014,7 +1094,7 @@ namespace SJson
 		auto node = parse(tokens, 0, index);
 		if (tokens[index].Token != TokenType::EndOfFile)
 		{
-			throw parse_error("Root not singluar", tokens[index]);
+			throw root_not_singular_error(tokens[index]);
 		}
 		return node;
 	}
@@ -1042,6 +1122,30 @@ namespace SJson
 			break;
 		}
 		return "ERROR TYPE";
+	}
+
+	inline std::string GetTokenFromType(TokenType type)
+	{
+		switch (type )
+		{
+		case SJson::TokenType::Null: return "null";
+		case SJson::TokenType::True: return "true";
+		case SJson::TokenType::False: return "false";
+		case SJson::TokenType::Integer: return "number";
+		case SJson::TokenType::Float: return "number";
+		case SJson::TokenType::String: return "string";
+		case SJson::TokenType::LeftBrace: return "'{'";
+		case SJson::TokenType::RightBrace: return "'}'";
+		case SJson::TokenType::LeftBracket: return "'['";
+		case SJson::TokenType::RightBracket: return "']'";
+		case SJson::TokenType::Comma: return "','";
+		case SJson::TokenType::Colon: return "':'";
+		case SJson::TokenType::Comment: return "'#'";
+		case SJson::TokenType::EndOfFile: return "EOF";
+		default:
+			break;
+		}
+		return "Unkown";
 	}
 
 	inline JsonNode object(std::initializer_list<std::pair<const std::string, JsonNode>> list)
