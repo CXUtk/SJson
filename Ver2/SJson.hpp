@@ -14,6 +14,8 @@
 #include <sstream>
 #include <iomanip>
 
+#include "../SRefl/SRefl.hpp"
+
 
 namespace std
 {
@@ -1059,7 +1061,7 @@ namespace SJson
         case TokenType::LeftBrace:
         {
             JsonNode node = JsonNode(object_type_init());
-            auto& obj = parse_object(tokens, index + 1, newIndex);
+            auto&& obj = parse_object(tokens, index + 1, newIndex);
             for (auto& pair : obj)
             {
                 node[pair.first] = pair.second;
@@ -1069,7 +1071,7 @@ namespace SJson
         case TokenType::LeftBracket:
         {
             JsonNode node = JsonNode(array_type_init());
-            auto& arr = parse_array(tokens, index + 1, newIndex);
+            auto&& arr = parse_array(tokens, index + 1, newIndex);
             for (auto& element : arr)
             {
                 node.push_back(element);
@@ -1182,87 +1184,97 @@ namespace SJson
     {
     };
 
-    template<typename T, typename = void>
-    struct is_parent_defined : public std::false_type {};
+//    template<typename T, typename = void>
+//    struct is_parent_defined : public std::false_type {};
+//
+//    template<typename T>
+//    struct is_parent_defined<T, std::void_t<decltype(T::parents)>> : std::true_type {};
+//
+//    template<typename T, typename = void>
+//    struct has_properties : public std::false_type {};
+//
+//    template<typename T>
+//    struct has_properties<T, std::void_t<decltype(T::properties())>> : std::true_type {};
+//
+//#define PROPERTY(member) SJson::property(&Self_Type::member, #member)
+//#define BASECLASS(type) SJson::classref<type>(#type)
+//#define PLACE(...) std::make_tuple(__VA_ARGS__)
+//#define PROPERTIES(Type, ...) constexpr static auto properties()\
+//{\
+//    using Self_Type = Type;\
+//    return PLACE(__VA_ARGS__);\
+//}\
+//
+//#define ENUM_KEY(key) case ENUM_TYPE::key: return #key;
+//#define GENERATE_ENUM(T, FIELDS)\
+//template<>\
+//struct SJson::enum_mapper<SType>\
+//{\
+//    static const char* const map(T v)\
+//    {\
+//        using ENUM_TYPE = T;\
+//        switch (v)\
+//        {\
+//        FIELDS(ENUM_KEY)\
+//        default:\
+//            break;\
+//        }\
+//        throw std::logic_error("Invalid enum type");\
+//    }\
+//};
+//
+//    template<typename Class, typename T>
+//    struct PropertyImpl
+//    {
+//        constexpr PropertyImpl(T Class::* aMember, const char* aName) : member{ aMember }, name{ aName } {}
+//
+//        using Type = T;
+//
+//        T Class::* member;
+//        const char* name;
+//    };
+//
+//    template<typename Class, typename T>
+//    constexpr auto property(T Class::* member, const char* name)
+//    {
+//        return PropertyImpl<Class, T>{member, name};
+//    }
+//
+//    template<typename Class>
+//    struct ClassImpl
+//    {
+//        using Type = Class;
+//
+//        const char* name;
+//    };
+//
+//    template<typename Class>
+//    constexpr auto classref(const char* name)
+//    {
+//        return ClassImpl<Class>{name};
+//    }
+//
+//    template <typename T, T... S, typename F>
+//    constexpr void for_sequence(std::integer_sequence<T, S...>, F&& f)
+//    {
+//        (static_cast<void>(f(std::integral_constant<T, S>{})), ...);
+//    }
+//
+//    template <typename E>
+//    struct enum_mapper
+//    {
+//        static const char* const map(E v);
+//    };
 
-    template<typename T>
-    struct is_parent_defined<T, std::void_t<decltype(T::parents)>> : std::true_type {};
-
-    template<typename T, typename = void>
-    struct has_properties : public std::false_type {};
-
-    template<typename T>
-    struct has_properties<T, std::void_t<decltype(T::properties())>> : std::true_type {};
-
-#define PROPERTY(member) SJson::property(&Self_Type::member, #member)
-#define BASECLASS(type) SJson::classref<type>(#type)
-#define PLACE(...) std::make_tuple(__VA_ARGS__)
-#define PROPERTIES(Type, ...) constexpr static auto properties()\
-{\
-    using Self_Type = Type;\
-    return PLACE(__VA_ARGS__);\
-}\
-
-#define ENUM_KEY(key) case ENUM_TYPE::key: return #key;
-#define GENERATE_ENUM(T, FIELDS)\
-template<>\
-struct SJson::enum_mapper<SType>\
-{\
-    static const char* const map(T v)\
-    {\
-        using ENUM_TYPE = T;\
-        switch (v)\
-        {\
-        FIELDS(ENUM_KEY)\
-        default:\
-            break;\
-        }\
-        throw std::logic_error("Invalid enum type");\
-    }\
-};
-
-    template<typename Class, typename T>
-    struct PropertyImpl
+    /**
+     * @brief If is a string, we can convert it to a JSON string value
+     * @param v
+     * @return
+    */
+    inline SJson::JsonNode serialize(const std::string& v)
     {
-        constexpr PropertyImpl(T Class::* aMember, const char* aName) : member{ aMember }, name{ aName } {}
-
-        using Type = T;
-
-        T Class::* member;
-        const char* name;
-    };
-
-    template<typename Class, typename T>
-    constexpr auto property(T Class::* member, const char* name)
-    {
-        return PropertyImpl<Class, T>{member, name};
+        return SJson::JsonNode(v);
     }
-
-    template<typename Class>
-    struct ClassImpl
-    {
-        using Type = Class;
-
-        const char* name;
-    };
-
-    template<typename Class>
-    constexpr auto classref(const char* name)
-    {
-        return ClassImpl<Class>{name};
-    }
-
-    template <typename T, T... S, typename F>
-    constexpr void for_sequence(std::integer_sequence<T, S...>, F&& f)
-    {
-        (static_cast<void>(f(std::integral_constant<T, S>{})), ...);
-    }
-
-    template <typename E>
-    struct enum_mapper
-    {
-        static const char* const map(E v);
-    };
 
     template<typename T, std::enable_if_t<std::is_fundamental<T>::value, nullptr_t> = nullptr>
     constexpr JsonNode serialize(const T& v)
@@ -1287,37 +1299,7 @@ struct SJson::enum_mapper<SType>\
     constexpr JsonNode serialize(const T& v)
     {
         // If is a vector of elements, we can convert them to a JSON array
-        return SJson::JsonNode(enum_mapper<T>::enum_to_string(v));
-    }
-
-    template<typename T, std::enable_if_t<has_properties<T>::value, nullptr_t> = nullptr>
-    constexpr JsonNode serialize(const T& v)
-    {
-        SJson::JsonNode json;
-        // We first get the number of properties
-        constexpr auto nbProperties = std::tuple_size<decltype(T::properties())>::value;
-
-        // We iterate on the index sequence of size `nbProperties`
-        for_sequence(std::make_index_sequence<nbProperties>{}, [&](auto i) {
-            // get the property
-            constexpr auto property = std::get<i>(T::properties());
-
-            // set the value to the member
-            json[property.name] = serialize(v.*(property.member));
-            });
-
-        if constexpr (is_parent_defined<T>::value)
-        {
-            constexpr auto nParents = std::tuple_size<decltype(T::parents())>::value;
-            for_sequence(std::make_index_sequence<nParents>{}, [&json, &v](auto i) {
-                constexpr auto classRef = std::get<i>(T::parents());
-
-                std::string key = "$";
-                key.append(classRef.name);
-                json[key] = serialize(static_cast<const decltype(classRef)::Type&>(v));
-            });
-        }
-        return json;
+        return SJson::JsonNode(SRefl::EnumInfo<T>::enum_to_string(v));
     }
 
     template<typename K, typename V>
@@ -1352,17 +1334,6 @@ struct SJson::enum_mapper<SType>\
         }
     }
 
-
-    /**
-     * @brief If is a string, we can convert it to a JSON string value
-     * @param v
-     * @return
-    */
-    inline SJson::JsonNode serialize(const std::string& v)
-    {
-        return SJson::JsonNode(v);
-    }
-
     /**
      * @brief If it is a tuple of elements, we can convert it to a JSON array
      * @tparam ...Ts
@@ -1374,9 +1345,53 @@ struct SJson::enum_mapper<SType>\
     {
         SJson::JsonNode json = SJson::array({});
         constexpr auto numTypes = sizeof...(Ts);
-        for_sequence(std::make_index_sequence<numTypes>{}, [&](auto i) {
+        SRefl::for_sequence(std::make_index_sequence<numTypes>{}, [&](auto i) {
             json.push_back(serialize(std::get<i>(v)));
             });
+        return json;
+    }
+
+    template<typename T, std::enable_if_t<SRefl::has_fields_v<T>, nullptr_t> = nullptr>
+    constexpr JsonNode serialize(const T& v)
+    {
+        SJson::JsonNode json;
+        if constexpr (SRefl::has_fields_v<T>)
+        {
+            SRefl::ForEachField<T>([&json, &v](auto field) {
+                json[field.Name] = serialize(v.*(field.MemberPtr));
+                });
+        }
+        if constexpr (SRefl::has_bases_v<T>)
+        {
+            SRefl::ForEachBase<T>([&json, &v](auto baseRef) {
+                std::string key = "$";
+                key.append(baseRef.Name);
+                json[key] = serialize<decltype(baseRef)::_Type>(v);
+                });
+        }
+        //// We first get the number of properties
+        //constexpr auto nbProperties = std::tuple_size<decltype(T::properties())>::value;
+
+        //// We iterate on the index sequence of size `nbProperties`
+        //for_sequence(std::make_index_sequence<nbProperties>{}, [&](auto i) {
+        //    // get the property
+        //    constexpr auto property = std::get<i>(T::properties());
+
+        //    // set the value to the member
+        //    json[property.name] = serialize(v.*(property.member));
+        //    });
+
+        //if constexpr (is_parent_defined<T>::value)
+        //{
+        //    constexpr auto nParents = std::tuple_size<decltype(T::parents())>::value;
+        //    for_sequence(std::make_index_sequence<nParents>{}, [&json, &v](auto i) {
+        //        constexpr auto classRef = std::get<i>(T::parents());
+
+        //        std::string key = "$";
+        //        key.append(classRef.name);
+        //        json[key] = serialize(static_cast<const decltype(classRef)::Type&>(v));
+        //    });
+        //}
         return json;
     }
 
@@ -1418,35 +1433,45 @@ struct SJson::enum_mapper<SType>\
         }
         else if constexpr (std::is_enum<T>::value)
         {
-            return enum_mapper<T>::string_to_enum(node.Get<std::string>());
+            return SRefl::EnumInfo<T>::string_to_enum(node.Get<std::string>());
         }
-        else if constexpr (std::is_object<decltype(T::properties())>::value)
+        else if constexpr (SRefl::has_fields_v<T>)
         {
             T result;
-            // We first get the number of properties
-            constexpr auto nbProperties = std::tuple_size<decltype(T::properties())>::value;
-
-            // We iterate on the index sequence of size `nbProperties`
-            for_sequence(std::make_index_sequence<nbProperties>{}, [&](auto i) {
-                // get the property
-                constexpr auto prop = std::get<i>(T::properties());
-
-                // set the value to the member
-                result.*(prop.member) = de_serialize<decltype(prop)::Type>(node[prop.name]);
+            SRefl::ForEachField<T>([&result, &node](auto field) {
+                result.*(field.MemberPtr) = de_serialize<decltype(field)::_Type>(node[field.Name]);
                 });
+            //// We first get the number of properties
+            //constexpr auto nbProperties = std::tuple_size<decltype(T::properties())>::value;
 
-            if constexpr (is_parent_defined<T>::value)
+            //// We iterate on the index sequence of size `nbProperties`
+            //for_sequence(std::make_index_sequence<nbProperties>{}, [&](auto i) {
+            //    // get the property
+            //    constexpr auto prop = std::get<i>(T::properties());
+
+            //    // set the value to the member
+            //    result.*(prop.member) = de_serialize<decltype(prop)::Type>(node[prop.name]);
+            //    });
+
+            if constexpr (SRefl::has_bases_v<T>)
             {
-                constexpr auto nParents = std::tuple_size<decltype(T::parents())>::value;
-                for_sequence(std::make_index_sequence<nParents>{}, [&](auto i) {
-                    constexpr auto classRef = std::get<i>(T::parents());
-
-                    using baseType = typename decltype(classRef)::Type;
+                SRefl::ForEachBase<T>([&result, &node](auto baseRef) {
+                    using baseType = typename decltype(baseRef)::_Type;
                     baseType& base = result;
                     std::string key = "$";
-                    key.append(classRef.name);
+                    key.append(baseRef.Name);
                     base = de_serialize<baseType>(node[key]);
                     });
+                //constexpr auto nParents = std::tuple_size<decltype(T::parents())>::value;
+                //for_sequence(std::make_index_sequence<nParents>{}, [&](auto i) {
+                //    constexpr auto classRef = std::get<i>(T::parents());
+
+                //    using baseType = typename decltype(classRef)::Type;
+                //    baseType& base = result;
+                //    std::string key = "$";
+                //    key.append(classRef.name);
+                //    base = de_serialize<baseType>(node[key]);
+                //    });
             }
             return result;
         }

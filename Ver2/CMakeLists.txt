@@ -2,9 +2,9 @@
 
 project ("SJson")
 
-add_executable (SJsonTest "test.cpp" "SRefl.hpp")
+add_executable (SJsonTest "test.cpp")
 
 set_target_properties (SJsonTest PROPERTIES
-                      CXX_STANDARD 17
+                      CXX_STANDARD 20
                       CXX_EXTENSIONS OFF
                       )

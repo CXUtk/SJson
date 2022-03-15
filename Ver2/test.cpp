@@ -567,7 +567,7 @@ static void test_parse_object()
 
 }
 
-static char* JSON = R"(
+static const char* JSON = R"(
 {
     "Camera": {
         "Type": "Normal",
@@ -689,42 +689,59 @@ enum class SType
     C
 };
 
+template<>
+struct SRefl::EnumInfo<SType>
+{
+    SREFL_TYPEINFO_HEADER(SType);
+    constexpr static auto _ENUMLIST()
+    {
+        return std::make_tuple(
+            SREFL_ENUM_TERM(A),
+            SREFL_ENUM_TERM(B),
+            SREFL_ENUM_TERM(C)
+        );
+    }
+#define LISTFUNC(F) F(A) F(B) F(C)
+    GENERATE_ENUM_MAPPING(SType, LISTFUNC)
+#undef LISTFUNC
+};
+
 //#define FIELDS(F) F(A) F(B) F(C)
 //GENERATE_ENUM(SType, FIELDS)
 //#undef KEYS
 
-template<>
-struct SJson::enum_mapper<SType>
-{
-    using ENUM_TYPE = SType;
-    static const char* const enum_to_string(ENUM_TYPE v)
-    {
-        switch (v)
-        {
-        case ENUM_TYPE::A: return "A";
-        case ENUM_TYPE::B: return "B";
-        case ENUM_TYPE::C: return "C";
-        default:
-            break;
-        }
-        throw std::invalid_argument("Invalid enum type");
-    }
-
-    static ENUM_TYPE string_to_enum(const std::string& str)
-    {
-        static std::map<std::string, ENUM_TYPE> stringmap = {
-            {"A", ENUM_TYPE::A},
-            {"B", ENUM_TYPE::B},
-            {"C", ENUM_TYPE::C},
-        };
-        std::map<std::string, ENUM_TYPE>::iterator it;
-        if ((it = stringmap.find(str)) != stringmap.end())
-        {
-            return it->second;
-        }
-        throw std::invalid_argument("Invalid enum type");
-    }
-};
+//template<>
+//struct SJson::enum_mapper<SType>
+//{
+//    using ENUM_TYPE = SType;
+//    static const char* const enum_to_string(ENUM_TYPE v)
+//    {
+//        switch (v)
+//        {
+//        case ENUM_TYPE::A: return "A";
+//        case ENUM_TYPE::B: return "B";
+//        case ENUM_TYPE::C: return "C";
+//        default:
+//            break;
+//        }
+//        throw std::invalid_argument("Invalid enum type");
+//    }
+//
+//    static ENUM_TYPE string_to_enum(const std::string& str)
+//    {
+//        static std::map<std::string, ENUM_TYPE> stringmap = {
+//            {"A", ENUM_TYPE::A},
+//            {"B", ENUM_TYPE::B},
+//            {"C", ENUM_TYPE::C},
+//        };
+//        std::map<std::string, ENUM_TYPE>::iterator it;
+//        if ((it = stringmap.find(str)) != stringmap.end())
+//        {
+//            return it->second;
+//        }
+//        throw std::invalid_argument("Invalid enum type");
+//    }
+//};
 
 class Internal
 {
@@ -732,11 +749,25 @@ public:
     int A;
     float B;
 
-    PROPERTIES(Internal, PROPERTY(A), PROPERTY(B));
+    //PROPERTIES(Internal, PROPERTY(A), PROPERTY(B));
 
     bool operator==(const Internal& other) const
     {
         return A == other.A && B == other.B;
+    }
+};
+
+
+template<>
+struct SRefl::TypeInfo<Internal>
+{
+    SREFL_TYPEINFO_HEADER(Internal);
+    constexpr static auto _FIELDLIST()
+    {
+        return std::make_tuple(
+            SREFL_FIELD(A),
+            SREFL_FIELD(B)
+        );
     }
 };
 
@@ -745,11 +776,23 @@ class TestParent2
 public:
     int		ParentAge2;
 
-    PROPERTIES(TestParent2, PROPERTY(ParentAge2));
+    //PROPERTIES(TestParent2, PROPERTY(ParentAge2));
 
     bool operator==(const TestParent2& other) const
     {
         return ParentAge2 == other.ParentAge2;
+    }
+};
+
+template<>
+struct SRefl::TypeInfo<TestParent2>
+{
+    SREFL_TYPEINFO_HEADER(TestParent2);
+    constexpr static auto _FIELDLIST()
+    {
+        return std::make_tuple(
+            SREFL_FIELD(ParentAge2)
+        );
     }
 };
 
@@ -758,11 +801,23 @@ class TestParent
 public:
     int		ParentAge;
 
-    PROPERTIES(TestParent, PROPERTY(ParentAge));
+    // PROPERTIES(TestParent, PROPERTY(ParentAge));
 
     bool operator==(const TestParent& other) const
     {
         return ParentAge == other.ParentAge;
+    }
+};
+
+template<>
+struct SRefl::TypeInfo<TestParent>
+{
+    SREFL_TYPEINFO_HEADER(TestParent);
+    constexpr static auto _FIELDLIST()
+    {
+        return std::make_tuple(
+            SREFL_FIELD(ParentAge)
+        );
     }
 };
 
@@ -786,21 +841,48 @@ public:
             && InternalData == other.InternalData && EnumValue == other.EnumValue;
     }
 
-    PROPERTIES(TestObject, 
-        PROPERTY(Age), 
-        PROPERTY(Weight), 
-        PROPERTY(Male),
-        PROPERTY(Name),
-        PROPERTY(List),
-        PROPERTY(Mapp),
-        PROPERTY(InternalData),
-        PROPERTY(EnumValue)
-        );
-    constexpr static auto parents()
+    //PROPERTIES(TestObject, 
+    //    PROPERTY(Age), 
+    //    PROPERTY(Weight), 
+    //    PROPERTY(Male),
+    //    PROPERTY(Name),
+    //    PROPERTY(List),
+    //    PROPERTY(Mapp),
+    //    PROPERTY(InternalData),
+    //    PROPERTY(EnumValue)
+    //    );
+    //constexpr static auto parents()
+    //{
+    //    return std::make_tuple(
+    //        BASECLASS(TestParent),
+    //        BASECLASS(TestParent2)
+    //    );
+    //}
+};
+
+template<>
+struct SRefl::TypeInfo<TestObject>
+{
+    SREFL_TYPEINFO_HEADER(TestObject);
+    constexpr static auto _FIELDLIST()
     {
         return std::make_tuple(
-            BASECLASS(TestParent),
-            BASECLASS(TestParent2)
+            SREFL_FIELD(Age),
+            SREFL_FIELD(Weight),
+            SREFL_FIELD(Male),
+            SREFL_FIELD(Name),
+            SREFL_FIELD(List),
+            SREFL_FIELD(Mapp),
+            SREFL_FIELD(InternalData),
+            SREFL_FIELD(EnumValue)
+        );
+    }
+
+    constexpr static auto _BASELIST()
+    {
+        return std::make_tuple(
+            SREFL_BASECLASS(TestParent),
+            SREFL_BASECLASS(TestParent2)
         );
     }
 };
